@@ -1,14 +1,36 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap");
 
 :root {
-  font-family: Inter, system-ui, Arial, sans-serif;
-  color: #111827;
-  background: #f8fafc;
+  --gc-bg: #f4f6fb;
+  --gc-surface: #ffffff;
+  --gc-border: #d9e0ec;
+  --gc-text: #13203a;
+  --gc-muted: #4e5d7a;
+  --gc-accent: #0f5fa8;
+  --gc-accent-soft: #e6f0fb;
+  --gc-success: #0f766e;
+  --gc-warning: #b45309;
+  --gc-danger: #b91c1c;
+  font-family: "Sora", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color: var(--gc-text);
+  background: var(--gc-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f8fafc;
+  background:
+    radial-gradient(800px circle at 0% 0%, #d9e8fb 0%, transparent 60%),
+    radial-gradient(700px circle at 100% 0%, #f8d7d0 0%, transparent 55%),
+    var(--gc-bg);
+}
+
+#root {
+  min-height: 100vh;
 }

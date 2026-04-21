@@ -10,7 +10,14 @@ sys.path.append(os.getcwd())
 load_dotenv()
 
 from app.core.db import Base
-from app.models import User, CandidateProfile, Job
+from app.models import (
+    Application,
+    CandidateProfile,
+    CompanyProfile,
+    Job,
+    MatchScore,
+    User,
+)
 
 config = context.config
 
