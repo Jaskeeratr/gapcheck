@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import JobCard from "../components/JobCard";
@@ -39,15 +40,74 @@ const FALLBACK_JOBS: Job[] = [
   },
 ];
 
+type DevUser = {
+  id: string;
+};
+
+type ScoreResponse = {
+  overall_score: number;
+  gap_analysis?: {
+    verdict?: string;
+  } | null;
+};
+
+type ScoreBadge = {
+  label: string;
+  className: string;
+};
+
+function badgeForScore(overallScore: number): ScoreBadge {
+  if (overallScore >= 90) return { label: "Elite Match", className: "bg-emerald-100 text-emerald-800 border-emerald-300" };
+  if (overallScore >= 80) return { label: "Strong Match", className: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  if (overallScore >= 70) return { label: "Competitive", className: "bg-lime-50 text-lime-700 border-lime-200" };
+  if (overallScore >= 60) return { label: "Promising", className: "bg-amber-50 text-amber-800 border-amber-200" };
+  if (overallScore >= 50) return { label: "Developing", className: "bg-orange-50 text-orange-700 border-orange-200" };
+  if (overallScore >= 35) return { label: "Reach", className: "bg-rose-50 text-rose-700 border-rose-200" };
+  return { label: "Low Fit", className: "bg-rose-100 text-rose-800 border-rose-300" };
+}
+
+function unscoredBadge(): ScoreBadge {
+  return { label: "Unscored", className: "bg-slate-100 text-slate-700 border-slate-200" };
+}
+
 export default function JobBoardPage() {
   const [query, setQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "indeed" | "linkedin" | "ucalgary">("all");
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [hasResumeProfile, setHasResumeProfile] = useState(false);
+  const [scoreByJobId, setScoreByJobId] = useState<Record<string, ScoreBadge>>({});
+  const [scoringInProgress, setScoringInProgress] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    async function bootstrapUserAndProfile(): Promise<void> {
+      try {
+        const userResponse = await api.post<DevUser>("/users/dev-bootstrap");
+        const id = userResponse.data.id;
+        if (cancelled) return;
+        setUserId(id);
+
+        try {
+          await api.get(`/resume/${id}`);
+          if (!cancelled) {
+            setHasResumeProfile(true);
+          }
+        } catch (error: unknown) {
+          const status = (error as { response?: { status?: number } })?.response?.status;
+          if (!cancelled && status === 404) {
+            setHasResumeProfile(false);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setApiError("Could not initialize user session from backend.");
+        }
+      }
+    }
 
     async function loadJobs(): Promise<void> {
       try {
@@ -69,11 +129,58 @@ export default function JobBoardPage() {
       }
     }
 
+    bootstrapUserAndProfile();
     loadJobs();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function computeScoresForBoard(): Promise<void> {
+      if (!userId || !hasResumeProfile || jobs.length === 0) {
+        return;
+      }
+
+      setScoringInProgress(true);
+      const subset = jobs;
+      const settled = await Promise.allSettled(
+        subset.map((job) =>
+          api.post<ScoreResponse>("/scores/compute", {
+            user_id: userId,
+            job_id: job.id,
+          }),
+        ),
+      );
+
+      if (cancelled) return;
+
+      const nextMap: Record<string, ScoreBadge> = {};
+      settled.forEach((result, index) => {
+        const job = subset[index];
+        if (result.status !== "fulfilled") {
+          nextMap[job.id] = unscoredBadge();
+          return;
+        }
+        const data = result.value.data;
+        if (typeof data.overall_score === "number") {
+          nextMap[job.id] = badgeForScore(data.overall_score);
+        } else {
+          nextMap[job.id] = unscoredBadge();
+        }
+      });
+
+      setScoreByJobId(nextMap);
+      setScoringInProgress(false);
+    }
+
+    computeScoresForBoard();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobs, userId, hasResumeProfile]);
 
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -133,6 +240,16 @@ export default function JobBoardPage() {
           <p className="text-sm font-medium text-slate-500">{filteredJobs.length} active roles</p>
         </div>
 
+        {!hasResumeProfile ? (
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+            Upload your resume on the{" "}
+            <Link to="/profile" className="underline decoration-2 underline-offset-2">
+              Resume page
+            </Link>{" "}
+            to unlock full multi-level scoring.
+          </div>
+        ) : null}
+
         {apiError ? (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             {apiError}
@@ -152,7 +269,14 @@ export default function JobBoardPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {filteredJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
+              <JobCard
+                key={job.id}
+                job={job}
+                scoreLocked={!hasResumeProfile}
+                scoring={hasResumeProfile && scoringInProgress && !scoreByJobId[job.id]}
+                matchLabel={scoreByJobId[job.id]?.label}
+                matchClassName={scoreByJobId[job.id]?.className}
+              />
             ))}
           </div>
         )}

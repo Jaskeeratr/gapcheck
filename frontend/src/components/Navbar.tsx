@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 
 const navItems = [
   { label: "Jobs", to: "/" },
-  { label: "Profile", to: "/profile" },
+  { label: "Resume", to: "/profile" },
   { label: "Tracker", to: "/tracker" },
 ];
 

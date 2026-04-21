@@ -10,6 +10,7 @@ class CandidateProfileUpdate(BaseModel):
     skills: list[str] | None = None
     experience_years: float | None = None
     internship_count: int | None = None
+    experience_items: list[dict[str, Any]] | None = None
     projects: list[dict[str, Any]] | None = None
     education: dict[str, Any] | None = None
     domains: list[str] | None = None
@@ -22,6 +23,7 @@ class CandidateProfileResponse(BaseModel):
     skills: list[str] | None = None
     experience_years: float | None = None
     internship_count: int = Field(default=0)
+    experience_items: list[dict[str, Any]] | None = None
     projects: list[dict[str, Any]] | None = None
     education: dict[str, Any] | None = None
     domains: list[str] | None = None

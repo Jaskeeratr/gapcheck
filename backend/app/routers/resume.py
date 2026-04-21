@@ -22,8 +22,11 @@ def _extract_pdf_text(file_bytes: bytes) -> str:
             detail="pdfplumber is required for resume parsing. Install backend dependencies first.",
         ) from exc
 
-    with pdfplumber.open(BytesIO(file_bytes)) as pdf:
-        return " ".join(page.extract_text() or "" for page in pdf.pages).strip()
+    try:
+        with pdfplumber.open(BytesIO(file_bytes)) as pdf:
+            return " ".join(page.extract_text() or "" for page in pdf.pages).strip()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Could not read PDF text. Please upload a text-based PDF.") from exc
 
 
 @router.post("/upload", response_model=CandidateProfileResponse)
@@ -41,6 +44,9 @@ async def upload_resume(
 
     file_bytes = await file.read()
     resume_text = _extract_pdf_text(file_bytes)
+    if not resume_text.strip():
+        raise HTTPException(status_code=400, detail="Resume text was empty. Try exporting your resume as a text PDF.")
+
     parsed = parse_resume(resume_text)
 
     profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
@@ -52,6 +58,7 @@ async def upload_resume(
     profile.skills = parsed.get("skills") or []
     profile.experience_years = parsed.get("experience_years") or 0
     profile.internship_count = parsed.get("internship_count") or 0
+    profile.experience_items = parsed.get("experience_items") or []
     profile.projects = parsed.get("projects") or []
     profile.education = parsed.get("education") or {}
     profile.domains = parsed.get("domains") or []
@@ -82,3 +89,14 @@ def update_profile(user_id: UUID, payload: CandidateProfileUpdate, db: Session =
     db.commit()
     db.refresh(profile)
     return profile
+
+
+@router.delete("/{user_id}")
+def delete_profile(user_id: UUID, db: Session = Depends(get_db)):
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="Candidate profile not found")
+
+    db.delete(profile)
+    db.commit()
+    return {"status": "deleted"}

@@ -4,30 +4,15 @@ import type { Job } from "../types/job";
 
 type JobCardProps = {
   job: Job;
+  matchLabel?: string | null;
+  matchClassName?: string;
+  scoreLocked?: boolean;
+  scoring?: boolean;
 };
 
 function getSourceLabel(source?: string | null): string {
   if (!source) return "unknown";
   return source.replace("_", " ");
-}
-
-function getScoreBucket(experienceRequired?: number | null): { label: string; className: string } {
-  if (!experienceRequired || experienceRequired <= 0.5) {
-    return {
-      label: "Strong Match Potential",
-      className: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    };
-  }
-  if (experienceRequired <= 1.5) {
-    return {
-      label: "Close Miss Potential",
-      className: "bg-amber-50 text-amber-800 border-amber-200",
-    };
-  }
-  return {
-    label: "Likely Stretch",
-    className: "bg-rose-50 text-rose-700 border-rose-200",
-  };
 }
 
 function formatPostedDate(rawDate?: string | null): string {
@@ -37,8 +22,19 @@ function formatPostedDate(rawDate?: string | null): string {
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export default function JobCard({ job }: JobCardProps) {
-  const scoreBucket = getScoreBucket(job.experience_required);
+export default function JobCard({
+  job,
+  matchLabel = null,
+  matchClassName = "bg-slate-100 text-slate-700 border-slate-200",
+  scoreLocked = false,
+  scoring = false,
+}: JobCardProps) {
+  const badgeLabel = scoreLocked ? "Upload Resume to Unlock" : scoring ? "Scoring..." : matchLabel ?? "Unscored";
+  const badgeClass = scoreLocked
+    ? "bg-slate-100 text-slate-600 border-slate-200"
+    : scoring
+      ? "bg-blue-50 text-blue-700 border-blue-200"
+      : matchClassName;
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -51,8 +47,8 @@ export default function JobCard({ job }: JobCardProps) {
           </p>
         </div>
 
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${scoreBucket.className}`}>
-          {scoreBucket.label}
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass}`}>
+          {badgeLabel}
         </span>
       </div>
 

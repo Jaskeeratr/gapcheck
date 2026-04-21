@@ -10,6 +10,15 @@ WEIGHTS = {
     "domain": 0.10,
 }
 
+RESUME_BASELINE_WEIGHTS = {
+    "skills_depth": 0.28,
+    "projects_depth": 0.22,
+    "internship_depth": 0.18,
+    "experience_items_depth": 0.17,
+    "education_completeness": 0.15,
+    "experience_depth": 0.10,
+}
+
 
 def normalized_required_skills(raw_required_skills: Any) -> list[dict[str, float | str]]:
     """
@@ -159,6 +168,40 @@ def score_domain(candidate_domains: list[str] | None, job_domain: str | None) ->
     return 45.0
 
 
+def score_resume_baseline(candidate: dict[str, Any]) -> float:
+    """
+    Resume quality score using a consistent rubric for all candidates.
+    This represents "how complete/strong is the resume itself" independent of one job.
+    """
+    skills = candidate.get("skills") or []
+    projects = candidate.get("projects") or []
+    experience_items = candidate.get("experience_items") or []
+    internship_count = int(candidate.get("internship_count") or 0)
+    experience_years = float(candidate.get("experience_years") or 0)
+    education = candidate.get("education") or {}
+
+    skills_depth = min(len(skills) / 12, 1.0) * 100
+    projects_depth = min(len(projects) / 4, 1.0) * 100
+    internship_depth = min(internship_count / 2, 1.0) * 100
+    experience_items_depth = min(len(experience_items) / 3, 1.0) * 100
+    experience_depth = min(experience_years / 2.0, 1.0) * 100
+
+    required_education_fields = ["degree", "program", "university"]
+    present_education_fields = sum(1 for key in required_education_fields if education.get(key))
+    education_completeness = (present_education_fields / len(required_education_fields)) * 100
+
+    baseline_score = (
+        skills_depth * RESUME_BASELINE_WEIGHTS["skills_depth"]
+        + projects_depth * RESUME_BASELINE_WEIGHTS["projects_depth"]
+        + internship_depth * RESUME_BASELINE_WEIGHTS["internship_depth"]
+        + experience_items_depth * RESUME_BASELINE_WEIGHTS["experience_items_depth"]
+        + education_completeness * RESUME_BASELINE_WEIGHTS["education_completeness"]
+        + experience_depth * RESUME_BASELINE_WEIGHTS["experience_depth"]
+    )
+
+    return round(baseline_score, 2)
+
+
 def compute_match(candidate: dict[str, Any], job: dict[str, Any]) -> dict[str, float]:
     dimension_scores = {
         "skills": score_skills(candidate.get("skills") or [], job.get("required_skills")),
@@ -171,5 +214,15 @@ def compute_match(candidate: dict[str, Any], job: dict[str, Any]) -> dict[str, f
         "domain": score_domain(candidate.get("domains"), job.get("domain")),
     }
 
-    overall = round(sum(dimension_scores[key] * WEIGHTS[key] for key in WEIGHTS), 2)
-    return {"overall": overall, **dimension_scores}
+    role_match_score = sum(dimension_scores[key] * WEIGHTS[key] for key in WEIGHTS)
+    resume_baseline_score = score_resume_baseline(candidate)
+
+    # Calibrated overall score:
+    # job-specific role alignment remains dominant, while resume baseline adds consistency.
+    overall = round(role_match_score * 0.85 + resume_baseline_score * 0.15, 2)
+    return {
+        "overall": overall,
+        "resume_baseline": resume_baseline_score,
+        "role_match": round(role_match_score, 2),
+        **dimension_scores,
+    }

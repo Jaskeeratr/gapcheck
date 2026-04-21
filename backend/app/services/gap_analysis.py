@@ -117,5 +117,7 @@ def generate_gap_analysis(
         "strengths": strengths,
         "company_insight": company_insight,
         "apply_recommendation": scores.get("overall", 0) >= 55,
+        "resume_baseline_score": scores.get("resume_baseline"),
+        "role_match_score": scores.get("role_match"),
         "resume_tip": resume_tip,
     }

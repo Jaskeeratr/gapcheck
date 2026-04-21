@@ -21,6 +21,7 @@ def _candidate_payload(profile: CandidateProfile) -> dict:
         "skills": profile.skills or [],
         "experience_years": float(profile.experience_years or 0),
         "internship_count": profile.internship_count or 0,
+        "experience_items": profile.experience_items or [],
         "projects": profile.projects or [],
         "education": profile.education or {},
         "domains": profile.domains or [],

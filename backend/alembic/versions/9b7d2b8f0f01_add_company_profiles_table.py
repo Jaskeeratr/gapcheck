@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.create_table(
         "company_profiles",
-        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("company_name", sa.String(length=200), nullable=False),
         sa.Column("typical_skills", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("typical_exp_years", sa.Numeric(precision=4, scale=1), nullable=True),

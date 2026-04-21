@@ -13,6 +13,7 @@ class CandidateProfile(Base):
     skills = Column(JSONB, nullable=True)
     experience_years = Column(Numeric(4, 1), nullable=True)
     internship_count = Column(Integer, nullable=False, default=0)
+    experience_items = Column(JSONB, nullable=True)
     projects = Column(JSONB, nullable=True)
     education = Column(JSONB, nullable=True)
     domains = Column(JSONB, nullable=True)
