@@ -7,7 +7,11 @@ load_dotenv()
 
 
 def _split_origins(raw_origins: str) -> list[str]:
-    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    def _normalize(origin: str) -> str:
+        # Browser Origin header never includes a trailing slash.
+        return origin.strip().rstrip("/")
+
+    origins = [_normalize(origin) for origin in raw_origins.split(",") if origin.strip()]
     return origins or ["http://localhost:5173"]
 
 
