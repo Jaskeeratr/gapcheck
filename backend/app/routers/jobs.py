@@ -1,13 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_db
 from app.models.job import Job
 from app.schemas.job import JobCreate, JobResponse
-from app.services.job_loader import ensure_minimum_jobs, seed_jobs
+from app.services.job_loader import ensure_minimum_jobs, ingest_live_jobs, seed_jobs
 
 router = APIRouter()
 
@@ -37,6 +37,7 @@ def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     return job
 
 
+@router.get("", response_model=list[JobResponse])
 @router.get("/", response_model=list[JobResponse])
 def list_jobs(
     search: str | None = None,
@@ -44,12 +45,18 @@ def list_jobs(
     is_active: bool = True,
     limit: int = 100,
     auto_fill: bool = True,
+    include_baseline: bool = True,
+    source: str | None = None,
     db: Session = Depends(get_db),
 ):
     if settings.ENVIRONMENT == "development" and auto_fill and is_active:
         ensure_minimum_jobs(db, minimum_jobs=24)
 
     query = db.query(Job).filter(Job.is_active == is_active)
+    if not include_baseline:
+        query = query.filter((Job.source.is_(None)) | (Job.source != "baseline_seed"))
+    if source:
+        query = query.filter(Job.source == source)
     if company:
         query = query.filter(Job.company.ilike(f"%{company}%"))
     if search:
@@ -59,15 +66,43 @@ def list_jobs(
     return query.order_by(Job.scraped_at.desc()).limit(safe_limit).all()
 
 
+@router.post("/seed-demo")
+def seed_demo_jobs(amount: int = 20, db: Session = Depends(get_db)):
+    inserted = seed_jobs(db, amount=amount)
+    return {"inserted": inserted}
+
+
+@router.api_route("/ingest-live", methods=["GET", "POST"])
+@router.api_route("/ingest-live/", methods=["GET", "POST"])
+def ingest_live_listings(
+    max_per_source: int | None = None,
+    x_job_ingest_token: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    if settings.JOB_INGEST_TOKEN and x_job_ingest_token != settings.JOB_INGEST_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid ingest token")
+    return ingest_live_jobs(db, max_per_source=max_per_source)
+
+
+@router.get("/ingest-status")
+@router.get("/ingest-status/")
+def ingest_status():
+    return {
+        "configured_greenhouse_boards": settings.GREENHOUSE_BOARDS,
+        "configured_lever_companies": settings.LEVER_COMPANIES,
+        "ingest_enable_remotive": settings.INGEST_ENABLE_REMOTIVE,
+        "ingest_enable_arbeitnow": settings.INGEST_ENABLE_ARBEITNOW,
+        "ingest_enable_remoteok": settings.INGEST_ENABLE_REMOTEOK,
+        "ingest_student_only": settings.INGEST_STUDENT_ONLY,
+        "job_ingest_token_required": bool(settings.JOB_INGEST_TOKEN),
+        "timeout_seconds": settings.JOB_INGEST_TIMEOUT_SEC,
+        "max_per_source": settings.JOB_INGEST_MAX_PER_SOURCE,
+    }
+
+
 @router.get("/{job_id}", response_model=JobResponse)
 def get_job(job_id: UUID, db: Session = Depends(get_db)):
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
-
-
-@router.post("/seed-demo")
-def seed_demo_jobs(amount: int = 20, db: Session = Depends(get_db)):
-    inserted = seed_jobs(db, amount=amount)
-    return {"inserted": inserted}

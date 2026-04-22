@@ -27,6 +27,19 @@ class Settings:
     )
     CLAUDE_MODEL: str = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    GREENHOUSE_BOARDS: list[str] = field(
+        default_factory=lambda: [value.strip() for value in os.getenv("GREENHOUSE_BOARDS", "").split(",") if value.strip()]
+    )
+    LEVER_COMPANIES: list[str] = field(
+        default_factory=lambda: [value.strip() for value in os.getenv("LEVER_COMPANIES", "").split(",") if value.strip()]
+    )
+    INGEST_ENABLE_REMOTIVE: bool = os.getenv("INGEST_ENABLE_REMOTIVE", "true").lower() == "true"
+    INGEST_ENABLE_ARBEITNOW: bool = os.getenv("INGEST_ENABLE_ARBEITNOW", "true").lower() == "true"
+    INGEST_ENABLE_REMOTEOK: bool = os.getenv("INGEST_ENABLE_REMOTEOK", "true").lower() == "true"
+    INGEST_STUDENT_ONLY: bool = os.getenv("INGEST_STUDENT_ONLY", "true").lower() == "true"
+    JOB_INGEST_TIMEOUT_SEC: int = int(os.getenv("JOB_INGEST_TIMEOUT_SEC", "15"))
+    JOB_INGEST_MAX_PER_SOURCE: int = int(os.getenv("JOB_INGEST_MAX_PER_SOURCE", "120"))
+    JOB_INGEST_TOKEN: str = os.getenv("JOB_INGEST_TOKEN", "")
 
 
 settings = Settings()

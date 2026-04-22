@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import axios from "axios";
 
 import { api } from "../api/client";
+import type { Application } from "../types/application";
 import type { Job } from "../types/job";
 
 type DevUser = {
@@ -68,6 +70,8 @@ export default function JobDetailPage() {
   const [score, setScore] = useState<ScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [computing, setComputing] = useState(false);
+  const [tracking, setTracking] = useState(false);
+  const [tracked, setTracked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,6 +96,17 @@ export default function JobDetailPage() {
         const jobResponse = await api.get<Job>(`/jobs/${jobId}`);
         if (cancelled) return;
         setJob(jobResponse.data);
+
+        try {
+          const applicationsResponse = await api.get<Application[]>(`/applications/user/${resolvedUserId}`);
+          if (!cancelled) {
+            setTracked(applicationsResponse.data.some((app) => app.job_id === jobId));
+          }
+        } catch {
+          if (!cancelled) {
+            setTracked(false);
+          }
+        }
 
         try {
           await api.get(`/resume/${resolvedUserId}`);
@@ -135,6 +150,32 @@ export default function JobDetailPage() {
       cancelled = true;
     };
   }, [jobId]);
+
+  async function handleTrackApplication(): Promise<void> {
+    if (!userId || !jobId) return;
+    try {
+      setTracking(true);
+      setError(null);
+      await api.post<Application>("/applications", {
+        user_id: userId,
+        job_id: jobId,
+        status: "applied",
+        notes: "Tracked from GapCheck match details",
+      });
+      setTracked(true);
+    } catch (unknownError: unknown) {
+      let message = "Could not track this application.";
+      if (axios.isAxiosError(unknownError)) {
+        const detail = unknownError.response?.data?.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          message = detail;
+        }
+      }
+      setError(message);
+    } finally {
+      setTracking(false);
+    }
+  }
 
   async function handleRecompute(): Promise<void> {
     if (!userId || !jobId || !hasResumeProfile) return;
@@ -186,15 +227,28 @@ export default function JobDetailPage() {
             </p>
           </div>
 
-          {hasResumeProfile ? (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleRecompute}
-              disabled={computing}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              onClick={handleTrackApplication}
+              disabled={tracking}
+              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:opacity-60 ${
+                tracked
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
             >
-              {computing ? "Recomputing..." : "Recompute Score"}
+              {tracking ? "Saving..." : tracked ? "Tracked" : "Track Application"}
             </button>
-          ) : null}
+            {hasResumeProfile ? (
+              <button
+                onClick={handleRecompute}
+                disabled={computing}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                {computing ? "Recomputing..." : "Recompute Score"}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {!hasResumeProfile ? (

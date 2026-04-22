@@ -1,8 +1,8 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
 
 :root {
-  --gc-bg: #f4f6fb;
+  --gc-bg: #eef3fb;
   --gc-surface: #ffffff;
   --gc-border: #d9e0ec;
   --gc-text: #13203a;
@@ -26,11 +26,30 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(800px circle at 0% 0%, #d9e8fb 0%, transparent 60%),
-    radial-gradient(700px circle at 100% 0%, #f8d7d0 0%, transparent 55%),
+    radial-gradient(980px circle at 0% 0%, #d6e7ff 0%, transparent 62%),
+    radial-gradient(820px circle at 100% 0%, #d8f2f2 0%, transparent 56%),
+    radial-gradient(1100px circle at 50% 120%, #f8e9d8 0%, transparent 58%),
     var(--gc-bg);
+  position: relative;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, rgba(14, 88, 162, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(14, 88, 162, 0.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(circle at 50% 16%, black 0%, rgba(0, 0, 0, 0.3) 58%, transparent 100%);
 }
 
 #root {
   min-height: 100vh;
+}
+
+::selection {
+  background: #cfe5ff;
+  color: #0b2b56;
 }

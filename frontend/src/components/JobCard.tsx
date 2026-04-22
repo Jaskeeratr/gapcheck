@@ -8,11 +8,14 @@ type JobCardProps = {
   matchClassName?: string;
   scoreLocked?: boolean;
   scoring?: boolean;
+  tracked?: boolean;
+  tracking?: boolean;
+  onTrack?: (jobId: string) => void;
 };
 
 function getSourceLabel(source?: string | null): string {
   if (!source) return "unknown";
-  return source.replace("_", " ");
+  return source.replace("_", " ").replace("baseline seed", "baseline");
 }
 
 function formatPostedDate(rawDate?: string | null): string {
@@ -28,6 +31,9 @@ export default function JobCard({
   matchClassName = "bg-slate-100 text-slate-700 border-slate-200",
   scoreLocked = false,
   scoring = false,
+  tracked = false,
+  tracking = false,
+  onTrack,
 }: JobCardProps) {
   const badgeLabel = scoreLocked ? "Upload Resume to Unlock" : scoring ? "Scoring..." : matchLabel ?? "Unscored";
   const badgeClass = scoreLocked
@@ -37,7 +43,7 @@ export default function JobCard({
       : matchClassName;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-100/60">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">{job.title}</h3>
@@ -47,7 +53,7 @@ export default function JobCard({
           </p>
         </div>
 
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass}`}>
+        <span className={`rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${badgeClass}`}>
           {badgeLabel}
         </span>
       </div>
@@ -60,18 +66,31 @@ export default function JobCard({
           <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">{job.role_type}</span>
         ) : null}
         {job.domain ? (
-          <span className="rounded-md bg-blue-50 px-2 py-1 font-medium text-blue-700">{job.domain}</span>
+          <span className="rounded-md bg-gradient-to-r from-blue-50 to-cyan-50 px-2 py-1 font-medium text-blue-700">{job.domain}</span>
         ) : null}
       </div>
 
       <div className="mt-5 flex items-center justify-between">
         <p className="text-xs font-medium text-slate-500">Posted: {formatPostedDate(job.posted_at)}</p>
-        <Link
-          to={`/jobs/${job.id}`}
-          className="inline-flex items-center rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
-        >
-          View Match Details
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onTrack?.(job.id)}
+            disabled={tracking}
+            className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              tracked
+                ? "border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {tracking ? "Saving..." : tracked ? "Tracked" : "Track Application"}
+          </button>
+          <Link
+            to={`/jobs/${job.id}`}
+            className="inline-flex items-center rounded-lg bg-gradient-to-r from-blue-700 to-cyan-600 px-3 py-2 text-sm font-semibold text-white transition hover:from-blue-800 hover:to-cyan-700"
+          >
+            View Match Details
+          </Link>
+        </div>
       </div>
     </article>
   );

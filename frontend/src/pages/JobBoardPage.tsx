@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import axios from "axios";
 
 import { api } from "../api/client";
 import JobCard from "../components/JobCard";
+import type { Application } from "../types/application";
 import type { Job } from "../types/job";
 
 const FALLBACK_JOBS: Job[] = [
@@ -44,6 +46,17 @@ type DevUser = {
   id: string;
 };
 
+type IngestStats = {
+  fetched: number;
+  inserted: number;
+  updated: number;
+  greenhouse_fetched?: number;
+  lever_fetched?: number;
+  remotive_fetched?: number;
+  arbeitnow_fetched?: number;
+  remoteok_fetched?: number;
+};
+
 type ScoreResponse = {
   overall_score: number;
   gap_analysis?: {
@@ -72,14 +85,30 @@ function unscoredBadge(): ScoreBadge {
 
 export default function JobBoardPage() {
   const [query, setQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "indeed" | "linkedin" | "ucalgary">("all");
+  const [sourceFilter, setSourceFilter] = useState<
+    | "all"
+    | "baseline_seed"
+    | "greenhouse"
+    | "lever"
+    | "remotive"
+    | "arbeitnow"
+    | "remoteok"
+    | "indeed"
+    | "linkedin"
+    | "ucalgary"
+  >("all");
+  const [includeBaseline, setIncludeBaseline] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [ingesting, setIngesting] = useState(false);
+  const [ingestMessage, setIngestMessage] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [hasResumeProfile, setHasResumeProfile] = useState(false);
   const [scoreByJobId, setScoreByJobId] = useState<Record<string, ScoreBadge>>({});
   const [scoringInProgress, setScoringInProgress] = useState(false);
+  const [trackedJobIds, setTrackedJobIds] = useState<Set<string>>(new Set());
+  const [trackingJobIds, setTrackingJobIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +142,9 @@ export default function JobBoardPage() {
       try {
         setLoading(true);
         setApiError(null);
-        const response = await api.get<Job[]>("/jobs", { params: { limit: 200, is_active: true } });
+        const response = await api.get<Job[]>("/jobs", {
+          params: { limit: 200, is_active: true, include_baseline: includeBaseline },
+        });
         if (!cancelled) {
           setJobs(response.data);
         }
@@ -134,7 +165,139 @@ export default function JobBoardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [includeBaseline]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadApplications(): Promise<void> {
+      if (!userId) return;
+      try {
+        const response = await api.get<Application[]>(`/applications/user/${userId}`);
+        if (cancelled) return;
+        setTrackedJobIds(new Set(response.data.map((app) => app.job_id)));
+      } catch {
+        if (!cancelled) {
+          // silent fallback
+        }
+      }
+    }
+    loadApplications();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function handleTrackApplication(jobId: string): Promise<void> {
+    if (!userId) {
+      setApiError("Could not initialize user session from backend.");
+      return;
+    }
+
+    setTrackingJobIds((prev) => new Set(prev).add(jobId));
+    try {
+      await api.post<Application>("/applications", {
+        user_id: userId,
+        job_id: jobId,
+        status: "applied",
+        notes: "Tracked from GapCheck job board",
+      });
+      setTrackedJobIds((prev) => {
+        const next = new Set(prev);
+        next.add(jobId);
+        return next;
+      });
+    } catch (unknownError: unknown) {
+      let message = "Could not track this application.";
+      if (axios.isAxiosError(unknownError)) {
+        const detail = unknownError.response?.data?.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          message = detail;
+        }
+      }
+      setApiError(message);
+    } finally {
+      setTrackingJobIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
+    }
+  }
+
+  async function handleRefreshLiveJobs(): Promise<void> {
+    try {
+      setIngesting(true);
+      setApiError(null);
+      setIngestMessage(null);
+      const token = import.meta.env.VITE_JOB_INGEST_TOKEN as string | undefined;
+      const headers = token ? { "x-job-ingest-token": token } : undefined;
+
+      let stats: IngestStats | null = null;
+      const candidateCalls: Array<{ route: string; method: "post" | "get" }> = [
+        { route: "/jobs/ingest-live", method: "post" },
+        { route: "/jobs/ingest-live/", method: "post" },
+        { route: "/jobs/ingest-live", method: "get" },
+        { route: "/jobs/ingest-live/", method: "get" },
+        { route: "/admin/jobs/ingest-live", method: "post" },
+        { route: "/admin/jobs/ingest-live/", method: "post" },
+        { route: "/admin/jobs/ingest-live", method: "get" },
+        { route: "/admin/jobs/ingest-live/", method: "get" },
+      ];
+      const triedStatuses: string[] = [];
+
+      for (const attempt of candidateCalls) {
+        try {
+          const response =
+            attempt.method === "post"
+              ? await api.post<IngestStats>(attempt.route, null, { headers })
+              : await api.get<IngestStats>(attempt.route, { headers });
+          stats = response.data;
+          break;
+        } catch (unknownError: unknown) {
+          if (!axios.isAxiosError(unknownError)) {
+            throw unknownError;
+          }
+
+          const status = unknownError.response?.status;
+          triedStatuses.push(`${attempt.method.toUpperCase()} ${attempt.route} -> ${status ?? "ERR"}`);
+          // Try compatibility fallback for older deployments and route styles.
+          // 422 commonly means /jobs/{job_id} caught "ingest-live" on older backends.
+          if (status === 404 || status === 405 || status === 422 || status === 307 || status === 308) {
+            continue;
+          }
+          throw unknownError;
+        }
+      }
+
+      if (!stats) {
+        throw new Error(`No ingest endpoint accepted this request. Tried: ${triedStatuses.join("; ")}`);
+      }
+
+      setIngestMessage(
+        `Live ingest complete: fetched ${stats.fetched} (Greenhouse ${stats.greenhouse_fetched ?? 0}, Lever ${stats.lever_fetched ?? 0}, Remotive ${stats.remotive_fetched ?? 0}, Arbeitnow ${stats.arbeitnow_fetched ?? 0}, RemoteOK ${stats.remoteok_fetched ?? 0}). Inserted ${stats.inserted}, updated ${stats.updated}.`,
+      );
+
+      const refreshed = await api.get<Job[]>("/jobs", {
+        params: { limit: 200, is_active: true, include_baseline: includeBaseline },
+      });
+      setJobs(refreshed.data);
+    } catch (unknownError: unknown) {
+      let message = "Live ingest failed.";
+      if (axios.isAxiosError(unknownError)) {
+        const detail = unknownError.response?.data?.detail;
+        if (typeof detail === "string" && detail.trim()) {
+          message = `Live ingest failed: ${detail}`;
+        } else if (unknownError.response?.status) {
+          message = `Live ingest failed (HTTP ${unknownError.response.status}).`;
+        }
+      } else if (unknownError instanceof Error && unknownError.message) {
+        message = `Live ingest failed: ${unknownError.message}`;
+      }
+      setApiError(message);
+    } finally {
+      setIngesting(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +370,7 @@ export default function JobBoardPage() {
           GapCheck surfaces current listings, predicts your match potential, and helps you decide what to apply to first.
         </p>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px]">
+        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px_auto]">
           <label className="block">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Search title, company, domain</span>
             <input
@@ -222,19 +385,62 @@ export default function JobBoardPage() {
             <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Source</span>
             <select
               value={sourceFilter}
-              onChange={(event) => setSourceFilter(event.target.value as "all" | "indeed" | "linkedin" | "ucalgary")}
+              onChange={(event) =>
+                setSourceFilter(
+                  event.target.value as
+                    | "all"
+                    | "baseline_seed"
+                    | "greenhouse"
+                    | "lever"
+                    | "remotive"
+                    | "arbeitnow"
+                    | "remoteok"
+                    | "indeed"
+                    | "linkedin"
+                    | "ucalgary",
+                )
+              }
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
             >
               <option value="all">All Sources</option>
+              <option value="baseline_seed">Baseline Roles</option>
+              <option value="greenhouse">Greenhouse</option>
+              <option value="lever">Lever</option>
+              <option value="remotive">Remotive</option>
+              <option value="arbeitnow">Arbeitnow</option>
+              <option value="remoteok">RemoteOK</option>
               <option value="indeed">Indeed</option>
               <option value="linkedin">LinkedIn</option>
               <option value="ucalgary">UCalgary</option>
             </select>
           </label>
+
+          <div className="flex flex-col justify-end gap-2">
+            <button
+              onClick={handleRefreshLiveJobs}
+              disabled={ingesting}
+              className="rounded-xl bg-gradient-to-r from-blue-700 to-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-blue-800 hover:to-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {ingesting ? "Refreshing..." : "Refresh Live Jobs"}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            id="include-baseline"
+            type="checkbox"
+            checked={includeBaseline}
+            onChange={(event) => setIncludeBaseline(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          <label htmlFor="include-baseline" className="text-sm text-slate-600">
+            Include baseline benchmark roles
+          </label>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-sm">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-slate-900">Job Board</h2>
           <p className="text-sm font-medium text-slate-500">{filteredJobs.length} active roles</p>
@@ -253,6 +459,11 @@ export default function JobBoardPage() {
         {apiError ? (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
             {apiError}
+          </div>
+        ) : null}
+        {ingestMessage ? (
+          <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+            {ingestMessage}
           </div>
         ) : null}
 
@@ -276,6 +487,9 @@ export default function JobBoardPage() {
                 scoring={hasResumeProfile && scoringInProgress && !scoreByJobId[job.id]}
                 matchLabel={scoreByJobId[job.id]?.label}
                 matchClassName={scoreByJobId[job.id]?.className}
+                tracked={trackedJobIds.has(job.id)}
+                tracking={trackingJobIds.has(job.id)}
+                onTrack={handleTrackApplication}
               />
             ))}
           </div>
