@@ -46,6 +46,11 @@ type DevUser = {
   id: string;
 };
 
+type CandidateProfile = {
+  skills?: string[] | null;
+  domains?: string[] | null;
+};
+
 type IngestStats = {
   fetched: number;
   inserted: number;
@@ -105,6 +110,8 @@ export default function JobBoardPage() {
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [hasResumeProfile, setHasResumeProfile] = useState(false);
+  const [profileKeywords, setProfileKeywords] = useState<string[]>([]);
+  const [useProfileKeywords, setUseProfileKeywords] = useState(true);
   const [scoreByJobId, setScoreByJobId] = useState<Record<string, ScoreBadge>>({});
   const [scoringInProgress, setScoringInProgress] = useState(false);
   const [trackedJobIds, setTrackedJobIds] = useState<Set<string>>(new Set());
@@ -121,14 +128,18 @@ export default function JobBoardPage() {
         setUserId(id);
 
         try {
-          await api.get(`/resume/${id}`);
+          const profileResponse = await api.get<CandidateProfile>(`/resume/${id}`);
           if (!cancelled) {
             setHasResumeProfile(true);
+            const rawTerms = [...(profileResponse.data.domains ?? []), ...(profileResponse.data.skills ?? [])];
+            const normalizedTerms = Array.from(new Set(rawTerms.map((value) => value.trim()).filter(Boolean)));
+            setProfileKeywords(normalizedTerms);
           }
         } catch (error: unknown) {
           const status = (error as { response?: { status?: number } })?.response?.status;
           if (!cancelled && status === 404) {
             setHasResumeProfile(false);
+            setProfileKeywords([]);
           }
         }
       } catch {
@@ -138,12 +149,27 @@ export default function JobBoardPage() {
       }
     }
 
+    bootstrapUserAndProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
     async function loadJobs(): Promise<void> {
       try {
         setLoading(true);
         setApiError(null);
         const response = await api.get<Job[]>("/jobs", {
-          params: { limit: 200, is_active: true, include_baseline: includeBaseline },
+          params: {
+            limit: 300,
+            is_active: true,
+            include_baseline: includeBaseline,
+            user_id: userId ?? undefined,
+            use_profile_keywords: Boolean(userId && useProfileKeywords && profileKeywords.length > 0),
+          },
         });
         if (!cancelled) {
           setJobs(response.data);
@@ -160,12 +186,11 @@ export default function JobBoardPage() {
       }
     }
 
-    bootstrapUserAndProfile();
     loadJobs();
     return () => {
       cancelled = true;
     };
-  }, [includeBaseline]);
+  }, [includeBaseline, userId, useProfileKeywords, profileKeywords.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -438,6 +463,34 @@ export default function JobBoardPage() {
             Include baseline benchmark roles
           </label>
         </div>
+
+        {hasResumeProfile ? (
+          <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <input
+                id="use-profile-keywords"
+                type="checkbox"
+                checked={useProfileKeywords}
+                onChange={(event) => setUseProfileKeywords(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              <label htmlFor="use-profile-keywords" className="text-sm text-slate-600">
+                Use profile keywords to personalize listings
+              </label>
+            </div>
+            {profileKeywords.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {profileKeywords.slice(0, 10).map((keyword) => (
+                  <span key={keyword} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                    {keyword}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">Add domains/skills on the Resume page to drive keyword targeting.</p>
+            )}
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-sm">

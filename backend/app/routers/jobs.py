@@ -1,10 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.deps import get_db
+from app.models.candidate_profile import CandidateProfile
 from app.models.job import Job
 from app.schemas.job import JobCreate, JobResponse
 from app.services.job_loader import ensure_minimum_jobs, ingest_live_jobs, seed_jobs
@@ -47,6 +49,9 @@ def list_jobs(
     auto_fill: bool = True,
     include_baseline: bool = True,
     source: str | None = None,
+    user_id: UUID | None = None,
+    use_profile_keywords: bool = False,
+    keywords: str | None = None,
     db: Session = Depends(get_db),
 ):
     if settings.ENVIRONMENT == "development" and auto_fill and is_active:
@@ -61,6 +66,34 @@ def list_jobs(
         query = query.filter(Job.company.ilike(f"%{company}%"))
     if search:
         query = query.filter(Job.title.ilike(f"%{search}%"))
+
+    keyword_terms: list[str] = []
+    if keywords:
+        keyword_terms.extend([value.strip().lower() for value in keywords.split(",") if value.strip()])
+
+    if use_profile_keywords and user_id:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+        if profile:
+            profile_domains = [str(value).strip().lower() for value in (profile.domains or []) if str(value).strip()]
+            profile_skills = [str(value).strip().lower() for value in (profile.skills or []) if str(value).strip()]
+            keyword_terms.extend(profile_domains)
+            keyword_terms.extend(profile_skills)
+
+    deduped_keywords = list(dict.fromkeys(keyword_terms))
+    if deduped_keywords:
+        keyword_filters = []
+        for term in deduped_keywords:
+            like_value = f"%{term}%"
+            keyword_filters.extend(
+                [
+                    Job.title.ilike(like_value),
+                    Job.company.ilike(like_value),
+                    Job.domain.ilike(like_value),
+                    Job.role_type.ilike(like_value),
+                    Job.description.ilike(like_value),
+                ]
+            )
+        query = query.filter(or_(*keyword_filters))
 
     safe_limit = min(max(limit, 1), 500)
     return query.order_by(Job.scraped_at.desc()).limit(safe_limit).all()

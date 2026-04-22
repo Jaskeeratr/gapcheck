@@ -240,18 +240,33 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
     safe_max = max(20, min(int(safe_max), 300))
     student_only = settings.INGEST_STUDENT_ONLY
 
-    greenhouse_boards = settings.GREENHOUSE_BOARDS or ["shopify", "hubspot"]
-    lever_companies = settings.LEVER_COMPANIES or ["netlify", "postman"]
+    greenhouse_boards = settings.GREENHOUSE_BOARDS or [
+        "shopify",
+        "hubspot",
+        "stripe",
+        "coinbase",
+        "notion",
+    ]
+    lever_companies = settings.LEVER_COMPANIES or [
+        "netlify",
+        "postman",
+        "asana",
+        "figma",
+    ]
     source_errors: dict[str, str] = {}
 
     try:
         greenhouse_listings = fetch_greenhouse_jobs(greenhouse_boards, max_per_board=safe_max, student_only=student_only)
+        if student_only and not greenhouse_listings:
+            greenhouse_listings = fetch_greenhouse_jobs(greenhouse_boards, max_per_board=safe_max, student_only=False)
     except Exception as exc:
         greenhouse_listings = []
         source_errors["greenhouse"] = str(exc)
 
     try:
         lever_listings = fetch_lever_jobs(lever_companies, max_per_company=safe_max, student_only=student_only)
+        if student_only and not lever_listings:
+            lever_listings = fetch_lever_jobs(lever_companies, max_per_company=safe_max, student_only=False)
     except Exception as exc:
         lever_listings = []
         source_errors["lever"] = str(exc)
@@ -260,6 +275,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         remotive_listings = (
             fetch_remotive_jobs(max_items=safe_max, student_only=student_only) if settings.INGEST_ENABLE_REMOTIVE else []
         )
+        if student_only and settings.INGEST_ENABLE_REMOTIVE and not remotive_listings:
+            remotive_listings = fetch_remotive_jobs(max_items=safe_max, student_only=False)
     except Exception as exc:
         remotive_listings = []
         source_errors["remotive"] = str(exc)
@@ -268,6 +285,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         arbeitnow_listings = (
             fetch_arbeitnow_jobs(max_items=safe_max, student_only=student_only) if settings.INGEST_ENABLE_ARBEITNOW else []
         )
+        if student_only and settings.INGEST_ENABLE_ARBEITNOW and not arbeitnow_listings:
+            arbeitnow_listings = fetch_arbeitnow_jobs(max_items=safe_max, student_only=False)
     except Exception as exc:
         arbeitnow_listings = []
         source_errors["arbeitnow"] = str(exc)
@@ -276,6 +295,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         remoteok_listings = (
             fetch_remoteok_jobs(max_items=safe_max, student_only=student_only) if settings.INGEST_ENABLE_REMOTEOK else []
         )
+        if student_only and settings.INGEST_ENABLE_REMOTEOK and not remoteok_listings:
+            remoteok_listings = fetch_remoteok_jobs(max_items=safe_max, student_only=False)
     except Exception as exc:
         remoteok_listings = []
         source_errors["remoteok"] = str(exc)
