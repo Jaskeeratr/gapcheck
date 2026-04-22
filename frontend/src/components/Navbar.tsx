@@ -8,8 +8,8 @@ const navItems = [
 
 export default function Navbar() {
   return (
-    <nav className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+    <nav className="sticky top-0 z-30 px-3 pt-3 sm:px-5">
+      <div className="mx-auto flex max-w-[1200px] items-center justify-between rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-3 shadow-lg shadow-blue-100/30 backdrop-blur-xl sm:px-6">
         <NavLink to="/" className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-700 to-cyan-500 p-2 text-white shadow-md shadow-blue-200">
             <svg viewBox="0 0 24 24" fill="none" className="h-full w-full">
@@ -21,6 +21,10 @@ export default function Navbar() {
             <p className="text-xs font-medium text-slate-500">Internship Match Intelligence</p>
           </div>
         </NavLink>
+
+        <div className="hidden rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700 md:block">
+          Product Demo
+        </div>
 
         <div className="rounded-xl border border-slate-200 bg-white/85 p-1.5 shadow-sm">
           <div className="flex items-center gap-1 text-sm font-semibold">

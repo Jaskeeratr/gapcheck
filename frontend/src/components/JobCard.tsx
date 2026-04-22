@@ -43,10 +43,11 @@ export default function JobCard({
       : matchClassName;
 
   return (
-    <article className="rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg hover:shadow-blue-100/60">
+    <article className="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-100/70">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-500 to-emerald-500 opacity-70 transition group-hover:opacity-100" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">{job.title}</h3>
+          <h3 className="text-lg font-semibold leading-snug text-slate-900">{job.title}</h3>
           <p className="mt-1 text-sm text-slate-600">
             {job.company}
             {job.location ? ` - ${job.location}` : ""}
@@ -70,9 +71,9 @@ export default function JobCard({
         ) : null}
       </div>
 
-      <div className="mt-5 flex items-center justify-between">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs font-medium text-slate-500">Posted: {formatPostedDate(job.posted_at)}</p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => onTrack?.(job.id)}
             disabled={tracking}

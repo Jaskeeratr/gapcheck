@@ -385,8 +385,8 @@ export default function ProfilePage() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-3">
-        <h1 className="text-2xl font-bold text-slate-900">Candidate Profile</h1>
+      <section className="gc-panel-strong rounded-3xl p-6 lg:col-span-3">
+        <h1 className="gc-text-gradient text-2xl font-bold">Candidate Profile</h1>
         <p className="mt-2 text-sm text-slate-600">Upload your PDF resume once. Parsing and score preparation happen in the backend.</p>
 
         <div className="mt-5 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1 text-sm font-semibold">
@@ -562,7 +562,7 @@ export default function ProfilePage() {
         )}
       </section>
 
-      <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-2">
+      <aside className="gc-panel rounded-3xl p-6 lg:col-span-2">
         <h2 className="text-lg font-bold text-slate-900">Profile Health</h2>
         <ul className="mt-4 space-y-3 text-sm text-slate-600">
           <li className="rounded-lg bg-slate-50 p-3">Skills parsed: {skillsCount}</li>

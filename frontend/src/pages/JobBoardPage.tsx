@@ -386,14 +386,19 @@ export default function JobBoardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white/90 p-6 shadow-sm">
+      <section className="gc-panel-strong rounded-3xl p-6">
         <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-700">Calgary Internship Intelligence</p>
-        <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+        <h1 className="gc-text-gradient mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
           Find where you are strong, then close the gap fast
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-slate-600 sm:text-base">
           GapCheck surfaces current listings, predicts your match potential, and helps you decide what to apply to first.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1">Multi-source ingest</span>
+          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1">Resume-aware scoring</span>
+          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1">Keyword targeting</span>
+        </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px_auto]">
           <label className="block">
@@ -493,10 +498,12 @@ export default function JobBoardPage() {
         ) : null}
       </section>
 
-      <section className="rounded-3xl border border-slate-200/90 bg-white/95 p-6 shadow-sm">
+      <section className="gc-panel rounded-3xl p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-slate-900">Job Board</h2>
-          <p className="text-sm font-medium text-slate-500">{filteredJobs.length} active roles</p>
+          <p className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-600">
+            {filteredJobs.length} active roles
+          </p>
         </div>
 
         {!hasResumeProfile ? (

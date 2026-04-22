@@ -212,15 +212,15 @@ export default function JobDetailPage() {
   const strengths = score?.gap_analysis?.strengths ?? [];
 
   if (loading) {
-    return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading match details...</div>;
+    return <div className="gc-panel rounded-2xl p-6 text-sm text-slate-500">Loading match details...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="gc-panel-strong rounded-3xl p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{job?.title ?? "Job Match Breakdown"}</h1>
+            <h1 className="gc-text-gradient text-2xl font-bold">{job?.title ?? "Job Match Breakdown"}</h1>
             <p className="mt-1 text-sm text-slate-600">
               {job?.company ?? "Unknown company"}
               {job?.location ? ` - ${job.location}` : ""}
@@ -261,7 +261,7 @@ export default function JobDetailPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-5">
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-3">
+        <article className="gc-panel rounded-3xl p-5 lg:col-span-3">
           <h2 className="text-lg font-bold text-slate-900">Score Dimensions</h2>
           <div className="mt-4 space-y-3">
             {dimensions.map((dimension) => (
@@ -288,7 +288,7 @@ export default function JobDetailPage() {
           ) : null}
         </article>
 
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+        <article className="gc-panel rounded-3xl p-5 lg:col-span-2">
           <h2 className="text-lg font-bold text-slate-900">Verdict</h2>
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${verdictUi.className}`}>{verdictUi.label}</div>
@@ -304,7 +304,7 @@ export default function JobDetailPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <article className="gc-panel rounded-3xl p-5">
           <h2 className="text-lg font-bold text-slate-900">What Needs Work</h2>
           <div className="mt-4 space-y-3">
             {gaps.length === 0 ? (
@@ -325,7 +325,7 @@ export default function JobDetailPage() {
           </div>
         </article>
 
-        <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <article className="gc-panel rounded-3xl p-5">
           <h2 className="text-lg font-bold text-slate-900">What Matches Well</h2>
           <ul className="mt-4 space-y-2">
             {strengths.length === 0 ? (

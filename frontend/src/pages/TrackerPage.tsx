@@ -89,8 +89,8 @@ export default function TrackerPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">Application Tracker</h1>
+      <section className="gc-panel-strong rounded-3xl p-6">
+        <h1 className="gc-text-gradient text-2xl font-bold">Application Tracker</h1>
         <p className="mt-2 text-sm text-slate-600">
           Track each application stage and compare outcomes to your predicted match score.
         </p>
@@ -100,7 +100,7 @@ export default function TrackerPage() {
 
       <section className="grid gap-4 xl:grid-cols-5">
         {columns.map((column) => (
-          <article key={column.title} className={`rounded-2xl border p-4 ${column.color}`}>
+          <article key={column.title} className={`rounded-2xl border p-4 shadow-sm ${column.color}`}>
             <h2 className="text-sm font-bold text-slate-800">{column.title}</h2>
             <div className="mt-3 space-y-2">
               {loading ? (
