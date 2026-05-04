@@ -10,7 +10,7 @@ from app.models.company_profile import CompanyProfile
 from app.models.job import Job
 from app.models.match_score import MatchScore
 from app.schemas.match_score import MatchScoreResponse, ScoreComputeRequest
-from app.services.claude_client import generate_gap_analysis
+from app.services.gap_analysis import generate_gap_analysis
 from app.services.scorer import compute_match
 
 router = APIRouter()
@@ -76,7 +76,7 @@ def compute_score(payload: ScoreComputeRequest, db: Session = Depends(get_db)):
         "hiring_notes": company_profile.hiring_notes,
     } if company_profile else None
 
-    gap_analysis = generate_gap_analysis(candidate_data, job_data, company_data, computed)
+    gap_analysis = generate_gap_analysis(candidate_data, job_data, computed, company_data)
 
     score_record = existing or MatchScore(user_id=payload.user_id, job_id=payload.job_id)
     score_record.overall_score = computed["overall"]

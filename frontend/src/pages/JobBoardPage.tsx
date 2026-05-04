@@ -53,6 +53,7 @@ type CandidateProfile = {
 
 type IngestStats = {
   fetched: number;
+  upserted?: number;
   inserted: number;
   updated: number;
   greenhouse_fetched?: number;
@@ -60,6 +61,7 @@ type IngestStats = {
   remotive_fetched?: number;
   arbeitnow_fetched?: number;
   remoteok_fetched?: number;
+  source_errors?: Record<string, string>;
 };
 
 type ScoreResponse = {
@@ -72,7 +74,10 @@ type ScoreResponse = {
 type ScoreBadge = {
   label: string;
   className: string;
+  score?: number;
 };
+
+type RecommendationView = "recommended" | "close" | "reach" | "all";
 
 function badgeForScore(overallScore: number): ScoreBadge {
   if (overallScore >= 90) return { label: "Elite Match", className: "bg-emerald-100 text-emerald-800 border-emerald-300" };
@@ -90,6 +95,7 @@ function unscoredBadge(): ScoreBadge {
 
 export default function JobBoardPage() {
   const [query, setQuery] = useState("");
+  const [recommendationView, setRecommendationView] = useState<RecommendationView>("recommended");
   const [sourceFilter, setSourceFilter] = useState<
     | "all"
     | "baseline_seed"
@@ -108,6 +114,7 @@ export default function JobBoardPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
+  const [lastIngestStats, setLastIngestStats] = useState<IngestStats | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [hasResumeProfile, setHasResumeProfile] = useState(false);
   const [profileKeywords, setProfileKeywords] = useState<string[]>([]);
@@ -301,6 +308,7 @@ export default function JobBoardPage() {
       setIngestMessage(
         `Live ingest complete: fetched ${stats.fetched} (Greenhouse ${stats.greenhouse_fetched ?? 0}, Lever ${stats.lever_fetched ?? 0}, Remotive ${stats.remotive_fetched ?? 0}, Arbeitnow ${stats.arbeitnow_fetched ?? 0}, RemoteOK ${stats.remoteok_fetched ?? 0}). Inserted ${stats.inserted}, updated ${stats.updated}.`,
       );
+      setLastIngestStats(stats);
 
       const refreshed = await api.get<Job[]>("/jobs", {
         params: { limit: 200, is_active: true, include_baseline: includeBaseline },
@@ -354,7 +362,7 @@ export default function JobBoardPage() {
         }
         const data = result.value.data;
         if (typeof data.overall_score === "number") {
-          nextMap[job.id] = badgeForScore(data.overall_score);
+          nextMap[job.id] = { ...badgeForScore(data.overall_score), score: data.overall_score };
         } else {
           nextMap[job.id] = unscoredBadge();
         }
@@ -370,9 +378,35 @@ export default function JobBoardPage() {
     };
   }, [jobs, userId, hasResumeProfile]);
 
+  const sourceCounts = useMemo(() => {
+    return jobs.reduce<Record<string, number>>((counts, job) => {
+      const key = job.source ?? "unknown";
+      counts[key] = (counts[key] ?? 0) + 1;
+      return counts;
+    }, {});
+  }, [jobs]);
+
+  const recommendationCounts = useMemo(() => {
+    return jobs.reduce(
+      (counts, job) => {
+        const score = scoreByJobId[job.id]?.score;
+        if (typeof score !== "number") {
+          counts.all += 1;
+          return counts;
+        }
+        if (score >= 70) counts.recommended += 1;
+        else if (score >= 50) counts.close += 1;
+        else counts.reach += 1;
+        counts.all += 1;
+        return counts;
+      },
+      { recommended: 0, close: 0, reach: 0, all: 0 },
+    );
+  }, [jobs, scoreByJobId]);
+
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return jobs.filter((job) => {
+    const nextJobs = jobs.filter((job) => {
       const sourceMatches = sourceFilter === "all" || (job.source ?? "").toLowerCase() === sourceFilter;
       if (!sourceMatches) return false;
 
@@ -382,7 +416,22 @@ export default function JobBoardPage() {
       const domain = (job.domain ?? "").toLowerCase();
       return title.includes(normalizedQuery) || company.includes(normalizedQuery) || domain.includes(normalizedQuery);
     });
-  }, [jobs, query, sourceFilter]);
+
+    const filteredByRecommendation = nextJobs.filter((job) => {
+      const score = scoreByJobId[job.id]?.score;
+      if (!hasResumeProfile || recommendationView === "all" || typeof score !== "number") return true;
+      if (recommendationView === "recommended") return score >= 70;
+      if (recommendationView === "close") return score >= 50 && score < 70;
+      return score < 50;
+    });
+
+    return [...filteredByRecommendation].sort((a, b) => {
+      const scoreA = scoreByJobId[a.id]?.score ?? -1;
+      const scoreB = scoreByJobId[b.id]?.score ?? -1;
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      return new Date(b.scraped_at).getTime() - new Date(a.scraped_at).getTime();
+    });
+  }, [jobs, query, sourceFilter, scoreByJobId, hasResumeProfile, recommendationView]);
 
   return (
     <div className="space-y-6">
@@ -506,6 +555,35 @@ export default function JobBoardPage() {
           </p>
         </div>
 
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { key: "recommended", label: "Recommended", count: recommendationCounts.recommended },
+            { key: "close", label: "Close Matches", count: recommendationCounts.close },
+            { key: "reach", label: "Reach Roles", count: recommendationCounts.reach },
+            { key: "all", label: "All Roles", count: recommendationCounts.all },
+          ].map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setRecommendationView(item.key as RecommendationView)}
+              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                recommendationView === item.key
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {item.label} <span className="ml-1 opacity-75">{item.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-2 lg:grid-cols-5">
+          {["greenhouse", "lever", "remotive", "arbeitnow", "remoteok"].map((source) => (
+            <div key={source} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <span className="capitalize">{source}</span>: {sourceCounts[source] ?? 0}
+            </div>
+          ))}
+        </div>
+
         {!hasResumeProfile ? (
           <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
             Upload your resume on the{" "}
@@ -524,6 +602,11 @@ export default function JobBoardPage() {
         {ingestMessage ? (
           <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {ingestMessage}
+            {lastIngestStats?.source_errors && Object.keys(lastIngestStats.source_errors).length > 0 ? (
+              <p className="mt-2 text-xs text-emerald-900">
+                Some sources returned errors. Check backend logs before relying on source coverage.
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -547,6 +630,7 @@ export default function JobBoardPage() {
                 scoring={hasResumeProfile && scoringInProgress && !scoreByJobId[job.id]}
                 matchLabel={scoreByJobId[job.id]?.label}
                 matchClassName={scoreByJobId[job.id]?.className}
+                matchScore={scoreByJobId[job.id]?.score}
                 tracked={trackedJobIds.has(job.id)}
                 tracking={trackingJobIds.has(job.id)}
                 onTrack={handleTrackApplication}

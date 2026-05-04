@@ -6,6 +6,7 @@ type JobCardProps = {
   job: Job;
   matchLabel?: string | null;
   matchClassName?: string;
+  matchScore?: number;
   scoreLocked?: boolean;
   scoring?: boolean;
   tracked?: boolean;
@@ -25,10 +26,52 @@ function formatPostedDate(rawDate?: string | null): string {
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function extractSkillNames(requiredSkills: unknown): string[] {
+  if (!requiredSkills) return [];
+
+  if (Array.isArray(requiredSkills)) {
+    return requiredSkills
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "skill" in item) {
+          return String((item as { skill?: unknown }).skill ?? "");
+        }
+        return "";
+      })
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+
+  if (typeof requiredSkills === "object") {
+    return Object.keys(requiredSkills).slice(0, 3);
+  }
+
+  return [];
+}
+
+function buildEvidence(job: Job, matchScore?: number): string[] {
+  const evidence: string[] = [];
+  const skills = extractSkillNames(job.required_skills);
+
+  if (typeof matchScore === "number") {
+    evidence.push(`${Math.round(matchScore)}% resume-role alignment`);
+  }
+  if (skills.length > 0) {
+    evidence.push(`Signals: ${skills.join(", ")}`);
+  }
+  if (job.domain) {
+    evidence.push(`Domain: ${job.domain}`);
+  }
+
+  return evidence.slice(0, 3);
+}
+
 export default function JobCard({
   job,
   matchLabel = null,
   matchClassName = "bg-slate-100 text-slate-700 border-slate-200",
+  matchScore,
   scoreLocked = false,
   scoring = false,
   tracked = false,
@@ -69,6 +112,14 @@ export default function JobCard({
         {job.domain ? (
           <span className="rounded-md bg-gradient-to-r from-blue-50 to-cyan-50 px-2 py-1 font-medium text-blue-700">{job.domain}</span>
         ) : null}
+      </div>
+
+      <div className="mt-4 space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
+        {buildEvidence(job, matchScore).map((item) => (
+          <p key={item} className="text-xs font-medium text-slate-600">
+            {item}
+          </p>
+        ))}
       </div>
 
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
