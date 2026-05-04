@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from html import unescape
 from typing import Any
 
 SKILL_KEYWORDS: list[tuple[str, float, list[str]]] = [
@@ -16,11 +17,21 @@ SKILL_KEYWORDS: list[tuple[str, float, list[str]]] = [
     ("Git", 0.06, ["git", "github"]),
     ("Airflow", 0.08, ["airflow"]),
     ("FastAPI", 0.06, ["fastapi"]),
+    ("Excel", 0.08, ["excel", "spreadsheet"]),
+    ("Salesforce", 0.08, ["salesforce", "crm"]),
+    ("Figma", 0.08, ["figma", "wireframe", "prototype"]),
+    ("Analytics", 0.08, ["analytics", "metrics", "reporting"]),
+    ("Project Management", 0.08, ["project management", "roadmap", "stakeholder"]),
+    ("Customer Support", 0.08, ["customer support", "customer success", "support"]),
+    ("Marketing", 0.08, ["marketing", "campaign", "seo", "content"]),
+    ("Finance", 0.08, ["finance", "accounting", "budget", "forecast"]),
+    ("Operations", 0.08, ["operations", "process", "logistics", "supply chain"]),
 ]
 
 
 def strip_html(text: str) -> str:
-    without_tags = re.sub(r"<[^>]+>", " ", text or "")
+    decoded = unescape(text or "")
+    without_tags = re.sub(r"<[^>]+>", " ", decoded)
     return re.sub(r"\s+", " ", without_tags).strip()
 
 
@@ -51,18 +62,44 @@ def infer_required_skills(text: str, limit: int = 6) -> list[dict[str, Any]]:
 
 
 def infer_role_type(title: str, description: str) -> str:
+    title_blob = (title or "").lower()
     blob = f"{title} {description}".lower()
-    if "co-op" in blob or "coop" in blob:
+    if "co-op" in title_blob or "coop" in title_blob:
         return "co-op"
-    if "intern" in blob or "internship" in blob:
+    if "intern" in title_blob or "internship" in title_blob:
         return "internship"
-    if "new grad" in blob or "graduate" in blob or "entry level" in blob or "junior" in blob:
+    if "new grad" in title_blob or "graduate" in title_blob or "entry level" in title_blob or "junior" in title_blob:
         return "entry-level"
-    return "entry-level"
+    if any(token in title_blob for token in ["manager", "lead", "senior", "director", "principal"]):
+        return "experienced"
+    if any(token in blob for token in ["0-2 years", "early career", "entry level"]):
+        return "entry-level"
+    return "general"
 
 
 def infer_domain(title: str, description: str) -> str:
+    title_blob = (title or "").lower()
     blob = f"{title} {description}".lower()
+
+    title_domain_rules = [
+        ("data engineering", ["data engineer", "etl", "pipeline", "warehouse"]),
+        ("data analytics", ["data analyst", "business analyst", "analytics", "bi analyst"]),
+        ("web development", ["frontend", "front end", "web developer", "javascript"]),
+        ("cloud engineering", ["cloud", "platform engineer", "devops", "site reliability"]),
+        ("software engineering", ["backend", "software engineer", "developer", "full stack", "security engineer"]),
+        ("product", ["product manager", "product analyst", "product owner"]),
+        ("marketing", ["marketing", "content", "seo", "brand", "growth"]),
+        ("finance", ["finance", "accounting", "payroll", "financial"]),
+        ("operations", ["operations", "logistics", "supply chain", "procurement", "coordinator"]),
+        ("design", ["designer", "design", "ux", "ui/ux", "visual"]),
+        ("sales", ["sales", "account executive", "business development", "customer success"]),
+        ("people", ["human resources", "recruiter", "talent", "people operations"]),
+        ("support", ["support", "help desk", "customer service", "service desk"]),
+    ]
+    for domain, tokens in title_domain_rules:
+        if any(token in title_blob for token in tokens):
+            return domain
+
     if any(token in blob for token in ["data engineer", "etl", "pipeline", "warehouse", "airflow"]):
         return "data engineering"
     if any(token in blob for token in ["analyst", "tableau", "power bi", "dashboard", "business intelligence"]):
@@ -73,7 +110,23 @@ def infer_domain(title: str, description: str) -> str:
         return "cloud engineering"
     if any(token in blob for token in ["backend", "api", "distributed", "software"]):
         return "software engineering"
-    return "software engineering"
+    if any(token in blob for token in ["product manager", "product analyst", "product owner", "roadmap"]):
+        return "product"
+    if any(token in blob for token in ["marketing", "content", "seo", "brand", "growth"]):
+        return "marketing"
+    if any(token in blob for token in ["finance", "accounting", "bookkeeper", "payroll", "fp&a", "financial"]):
+        return "finance"
+    if any(token in blob for token in ["operations", "logistics", "supply chain", "procurement", "coordinator"]):
+        return "operations"
+    if any(token in blob for token in ["designer", "design", "ux", "ui/ux", "visual"]):
+        return "design"
+    if any(token in blob for token in ["sales", "account executive", "business development", "customer success"]):
+        return "sales"
+    if any(token in blob for token in ["human resources", "recruiter", "talent", "people operations"]):
+        return "people"
+    if any(token in blob for token in ["support", "help desk", "customer service", "service desk"]):
+        return "support"
+    return "general"
 
 
 def infer_experience_required(description: str) -> float:
@@ -100,4 +153,3 @@ def is_student_friendly(title: str, description: str) -> bool:
         "junior",
     ]
     return any(token in blob for token in positive_tokens)
-

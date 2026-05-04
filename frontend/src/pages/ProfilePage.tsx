@@ -52,6 +52,15 @@ type ProfileTab = "resume" | "parsed";
 
 const PROFILE_CACHE_KEY = "gapcheck_profile_cache_v1";
 
+const TARGET_KEYWORD_PRESETS = [
+  { label: "Software Intern", terms: ["software engineering", "python", "sql", "internship", "entry level"] },
+  { label: "Frontend", terms: ["frontend", "react", "typescript", "javascript", "web development"] },
+  { label: "Data", terms: ["data analyst", "sql", "python", "power bi", "analytics"] },
+  { label: "Product", terms: ["product analyst", "product management", "roadmap", "stakeholder", "analytics"] },
+  { label: "Marketing", terms: ["marketing", "content", "seo", "campaign", "growth"] },
+  { label: "Business/Ops", terms: ["operations", "finance", "customer success", "sales", "project management"] },
+];
+
 function readCachedProfile(): ResumeCache | null {
   try {
     const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
@@ -247,6 +256,14 @@ export default function ProfilePage() {
     }
     setDomains((prev) => [...prev, normalized]);
     setNewDomain("");
+  }
+
+  function applyKeywordPreset(terms: string[]): void {
+    setDomains((prev) => {
+      const existing = new Set(prev.map((item) => item.toLowerCase()));
+      const additions = terms.filter((term) => !existing.has(term.toLowerCase()));
+      return [...prev, ...additions];
+    });
   }
 
   function addProject(): void {
@@ -527,6 +544,18 @@ export default function ProfilePage() {
                   <p className="mb-2 text-xs text-slate-500">
                     These keywords personalize your Job Board feed. Add role families, stacks, tools, or target areas.
                   </p>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {TARGET_KEYWORD_PRESETS.map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => applyKeywordPreset(preset.terms)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        + {preset.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {domains.map((domain, index) => (
                       <span key={`${domain}-${index}`} className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">

@@ -78,6 +78,7 @@ type ScoreBadge = {
 };
 
 type RecommendationView = "recommended" | "close" | "reach" | "all";
+type LocationFocus = "calgary_ab" | "canada_remote" | "remote" | "all";
 
 function badgeForScore(overallScore: number): ScoreBadge {
   if (overallScore >= 90) return { label: "Elite Match", className: "bg-emerald-100 text-emerald-800 border-emerald-300" };
@@ -95,6 +96,8 @@ function unscoredBadge(): ScoreBadge {
 
 export default function JobBoardPage() {
   const [query, setQuery] = useState("");
+  const [domainFilter, setDomainFilter] = useState("all");
+  const [locationFocus, setLocationFocus] = useState<LocationFocus>("calgary_ab");
   const [recommendationView, setRecommendationView] = useState<RecommendationView>("recommended");
   const [sourceFilter, setSourceFilter] = useState<
     | "all"
@@ -115,6 +118,7 @@ export default function JobBoardPage() {
   const [ingesting, setIngesting] = useState(false);
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
   const [lastIngestStats, setLastIngestStats] = useState<IngestStats | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [hasResumeProfile, setHasResumeProfile] = useState(false);
   const [profileKeywords, setProfileKeywords] = useState<string[]>([]);
@@ -174,6 +178,7 @@ export default function JobBoardPage() {
             limit: 300,
             is_active: true,
             include_baseline: includeBaseline,
+            location_focus: locationFocus,
             user_id: userId ?? undefined,
             use_profile_keywords: Boolean(userId && useProfileKeywords && profileKeywords.length > 0),
           },
@@ -197,7 +202,7 @@ export default function JobBoardPage() {
     return () => {
       cancelled = true;
     };
-  }, [includeBaseline, userId, useProfileKeywords, profileKeywords.length]);
+  }, [includeBaseline, locationFocus, userId, useProfileKeywords, profileKeywords.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -309,9 +314,10 @@ export default function JobBoardPage() {
         `Live ingest complete: fetched ${stats.fetched} (Greenhouse ${stats.greenhouse_fetched ?? 0}, Lever ${stats.lever_fetched ?? 0}, Remotive ${stats.remotive_fetched ?? 0}, Arbeitnow ${stats.arbeitnow_fetched ?? 0}, RemoteOK ${stats.remoteok_fetched ?? 0}). Inserted ${stats.inserted}, updated ${stats.updated}.`,
       );
       setLastIngestStats(stats);
+      setLastRefreshedAt(new Date().toISOString());
 
       const refreshed = await api.get<Job[]>("/jobs", {
-        params: { limit: 200, is_active: true, include_baseline: includeBaseline },
+        params: { limit: 200, is_active: true, include_baseline: includeBaseline, location_focus: locationFocus },
       });
       setJobs(refreshed.data);
     } catch (unknownError: unknown) {
@@ -386,6 +392,10 @@ export default function JobBoardPage() {
     }, {});
   }, [jobs]);
 
+  const domainOptions = useMemo(() => {
+    return Array.from(new Set(jobs.map((job) => job.domain).filter((value): value is string => Boolean(value)))).sort();
+  }, [jobs]);
+
   const recommendationCounts = useMemo(() => {
     return jobs.reduce(
       (counts, job) => {
@@ -409,12 +419,22 @@ export default function JobBoardPage() {
     const nextJobs = jobs.filter((job) => {
       const sourceMatches = sourceFilter === "all" || (job.source ?? "").toLowerCase() === sourceFilter;
       if (!sourceMatches) return false;
+      const domainMatches = domainFilter === "all" || (job.domain ?? "").toLowerCase() === domainFilter;
+      if (!domainMatches) return false;
 
       if (!normalizedQuery) return true;
       const title = job.title.toLowerCase();
       const company = job.company.toLowerCase();
       const domain = (job.domain ?? "").toLowerCase();
-      return title.includes(normalizedQuery) || company.includes(normalizedQuery) || domain.includes(normalizedQuery);
+      const description = (job.description ?? "").toLowerCase();
+      const roleType = (job.role_type ?? "").toLowerCase();
+      return (
+        title.includes(normalizedQuery) ||
+        company.includes(normalizedQuery) ||
+        domain.includes(normalizedQuery) ||
+        description.includes(normalizedQuery) ||
+        roleType.includes(normalizedQuery)
+      );
     });
 
     const filteredByRecommendation = nextJobs.filter((job) => {
@@ -431,7 +451,7 @@ export default function JobBoardPage() {
       if (scoreA !== scoreB) return scoreB - scoreA;
       return new Date(b.scraped_at).getTime() - new Date(a.scraped_at).getTime();
     });
-  }, [jobs, query, sourceFilter, scoreByJobId, hasResumeProfile, recommendationView]);
+  }, [jobs, query, sourceFilter, domainFilter, scoreByJobId, hasResumeProfile, recommendationView]);
 
   return (
     <div className="space-y-6">
@@ -449,15 +469,45 @@ export default function JobBoardPage() {
           <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1">Keyword targeting</span>
         </div>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_190px_190px_190px_auto]">
           <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Search title, company, domain</span>
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Search title, company, skills, description</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="ex: data analyst, react, suncor"
+              placeholder="ex: marketing, finance, react, sales"
               className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition placeholder:text-slate-400 focus:ring-2"
             />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Location Focus</span>
+            <select
+              value={locationFocus}
+              onChange={(event) => setLocationFocus(event.target.value as LocationFocus)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
+            >
+              <option value="calgary_ab">Calgary / Alberta</option>
+              <option value="canada_remote">Canada + Remote</option>
+              <option value="remote">Remote Only</option>
+              <option value="all">All Locations</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Job Family</span>
+            <select
+              value={domainFilter}
+              onChange={(event) => setDomainFilter(event.target.value)}
+              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
+            >
+              <option value="all">All Job Families</option>
+              {domainOptions.map((domain) => (
+                <option key={domain} value={domain.toLowerCase()}>
+                  {domain}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="block">
@@ -502,6 +552,9 @@ export default function JobBoardPage() {
             >
               {ingesting ? "Refreshing..." : "Refresh Live Jobs"}
             </button>
+            {lastRefreshedAt ? (
+              <p className="text-right text-[11px] font-medium text-slate-500">Last refresh {new Date(lastRefreshedAt).toLocaleTimeString()}</p>
+            ) : null}
           </div>
         </div>
 
@@ -557,7 +610,7 @@ export default function JobBoardPage() {
 
         <div className="mb-4 flex flex-wrap gap-2">
           {[
-            { key: "recommended", label: "Recommended", count: recommendationCounts.recommended },
+            { key: "recommended", label: "Best Matches", count: recommendationCounts.recommended },
             { key: "close", label: "Close Matches", count: recommendationCounts.close },
             { key: "reach", label: "Reach Roles", count: recommendationCounts.reach },
             { key: "all", label: "All Roles", count: recommendationCounts.all },
@@ -583,6 +636,9 @@ export default function JobBoardPage() {
             </div>
           ))}
         </div>
+        <p className="mb-4 text-xs text-slate-500">
+          Default view is Calgary/Alberta-first. Switch location focus to Canada + Remote or All Locations when you want a wider board.
+        </p>
 
         {!hasResumeProfile ? (
           <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
@@ -631,6 +687,7 @@ export default function JobBoardPage() {
                 matchLabel={scoreByJobId[job.id]?.label}
                 matchClassName={scoreByJobId[job.id]?.className}
                 matchScore={scoreByJobId[job.id]?.score}
+                profileKeywords={profileKeywords}
                 tracked={trackedJobIds.has(job.id)}
                 tracking={trackingJobIds.has(job.id)}
                 onTrack={handleTrackApplication}

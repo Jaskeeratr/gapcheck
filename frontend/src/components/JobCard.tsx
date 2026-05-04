@@ -7,6 +7,7 @@ type JobCardProps = {
   matchLabel?: string | null;
   matchClassName?: string;
   matchScore?: number;
+  profileKeywords?: string[];
   scoreLocked?: boolean;
   scoring?: boolean;
   tracked?: boolean;
@@ -26,7 +27,7 @@ function formatPostedDate(rawDate?: string | null): string {
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function extractSkillNames(requiredSkills: unknown): string[] {
+function extractSkillNames(requiredSkills: unknown, limit = 4): string[] {
   if (!requiredSkills) return [];
 
   if (Array.isArray(requiredSkills)) {
@@ -40,25 +41,44 @@ function extractSkillNames(requiredSkills: unknown): string[] {
       })
       .map((value) => value.trim())
       .filter(Boolean)
-      .slice(0, 3);
+      .slice(0, limit);
   }
 
   if (typeof requiredSkills === "object") {
-    return Object.keys(requiredSkills).slice(0, 3);
+    return Object.keys(requiredSkills).slice(0, limit);
   }
 
   return [];
 }
 
-function buildEvidence(job: Job, matchScore?: number): string[] {
+function normalizeTerm(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildEvidence(job: Job, matchScore?: number, profileKeywords: string[] = []): string[] {
   const evidence: string[] = [];
   const skills = extractSkillNames(job.required_skills);
+  const searchableText = [job.title, job.company, job.domain, job.role_type, job.description, ...skills]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const normalizedKeywords = Array.from(new Set(profileKeywords.map(normalizeTerm).filter(Boolean)));
+  const matchedKeywords = normalizedKeywords.filter((keyword) => searchableText.includes(keyword)).slice(0, 3);
+  const missingSkillSignals = skills
+    .filter((skill) => !normalizedKeywords.includes(normalizeTerm(skill)))
+    .slice(0, 2);
 
   if (typeof matchScore === "number") {
     evidence.push(`${Math.round(matchScore)}% resume-role alignment`);
   }
+  if (matchedKeywords.length > 0) {
+    evidence.push(`Matched profile keywords: ${matchedKeywords.join(", ")}`);
+  }
+  if (missingSkillSignals.length > 0 && typeof matchScore === "number" && matchScore < 85) {
+    evidence.push(`Improve next: ${missingSkillSignals.join(", ")}`);
+  }
   if (skills.length > 0) {
-    evidence.push(`Signals: ${skills.join(", ")}`);
+    evidence.push(`Role signals: ${skills.join(", ")}`);
   }
   if (job.domain) {
     evidence.push(`Domain: ${job.domain}`);
@@ -72,6 +92,7 @@ export default function JobCard({
   matchLabel = null,
   matchClassName = "bg-slate-100 text-slate-700 border-slate-200",
   matchScore,
+  profileKeywords = [],
   scoreLocked = false,
   scoring = false,
   tracked = false,
@@ -115,7 +136,7 @@ export default function JobCard({
       </div>
 
       <div className="mt-4 space-y-1.5 rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-        {buildEvidence(job, matchScore).map((item) => (
+        {buildEvidence(job, matchScore, profileKeywords).map((item) => (
           <p key={item} className="text-xs font-medium text-slate-600">
             {item}
           </p>

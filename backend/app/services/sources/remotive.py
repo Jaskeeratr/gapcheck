@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from app.core.config import settings
 from app.services.sources.base import NormalizedJobListing
@@ -27,11 +27,9 @@ def _to_datetime(raw_value: str | None) -> datetime | None:
 
 def fetch_remotive_jobs(max_items: int = 120, student_only: bool = True) -> list[NormalizedJobListing]:
     url = "https://remotive.com/api/remote-jobs"
-    try:
-        with urlopen(url, timeout=settings.JOB_INGEST_TIMEOUT_SEC) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except Exception:
-        return []
+    request = Request(url, headers={"User-Agent": "GapCheck/1.0 (+local demo)"})
+    with urlopen(request, timeout=settings.JOB_INGEST_TIMEOUT_SEC) as response:
+        payload = json.loads(response.read().decode("utf-8"))
 
     listings: list[NormalizedJobListing] = []
     for row in (payload.get("jobs") or [])[:max_items]:

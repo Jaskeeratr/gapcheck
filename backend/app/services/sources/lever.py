@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from app.core.config import settings
 from app.services.sources.base import NormalizedJobListing
@@ -39,7 +39,8 @@ def fetch_lever_jobs(
     for token in company_tokens:
         url = f"https://api.lever.co/v0/postings/{token}?mode=json"
         try:
-            with urlopen(url, timeout=settings.JOB_INGEST_TIMEOUT_SEC) as response:
+            request = Request(url, headers={"User-Agent": "GapCheck/1.0 (+local demo)"})
+            with urlopen(request, timeout=settings.JOB_INGEST_TIMEOUT_SEC) as response:
                 rows = json.loads(response.read().decode("utf-8"))
         except Exception:
             continue

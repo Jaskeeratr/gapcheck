@@ -246,12 +246,19 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         "stripe",
         "coinbase",
         "notion",
+        "airbnb",
+        "ramp",
+        "rippling",
+        "datadog",
     ]
     lever_companies = settings.LEVER_COMPANIES or [
         "netlify",
         "postman",
         "asana",
         "figma",
+        "benchling",
+        "clearbit",
+        "zapier",
     ]
     source_errors: dict[str, str] = {}
 
@@ -259,6 +266,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         greenhouse_listings = fetch_greenhouse_jobs(greenhouse_boards, max_per_board=safe_max, student_only=student_only)
         if student_only and not greenhouse_listings:
             greenhouse_listings = fetch_greenhouse_jobs(greenhouse_boards, max_per_board=safe_max, student_only=False)
+        if not greenhouse_listings:
+            source_errors["greenhouse"] = "No listings returned from configured Greenhouse boards."
     except Exception as exc:
         greenhouse_listings = []
         source_errors["greenhouse"] = str(exc)
@@ -267,6 +276,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         lever_listings = fetch_lever_jobs(lever_companies, max_per_company=safe_max, student_only=student_only)
         if student_only and not lever_listings:
             lever_listings = fetch_lever_jobs(lever_companies, max_per_company=safe_max, student_only=False)
+        if not lever_listings:
+            source_errors["lever"] = "No listings returned from configured Lever companies."
     except Exception as exc:
         lever_listings = []
         source_errors["lever"] = str(exc)
@@ -277,6 +288,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         )
         if student_only and settings.INGEST_ENABLE_REMOTIVE and not remotive_listings:
             remotive_listings = fetch_remotive_jobs(max_items=safe_max, student_only=False)
+        if settings.INGEST_ENABLE_REMOTIVE and not remotive_listings:
+            source_errors["remotive"] = "No listings returned from Remotive."
     except Exception as exc:
         remotive_listings = []
         source_errors["remotive"] = str(exc)
@@ -287,6 +300,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         )
         if student_only and settings.INGEST_ENABLE_ARBEITNOW and not arbeitnow_listings:
             arbeitnow_listings = fetch_arbeitnow_jobs(max_items=safe_max, student_only=False)
+        if settings.INGEST_ENABLE_ARBEITNOW and not arbeitnow_listings:
+            source_errors["arbeitnow"] = "No listings returned from Arbeitnow."
     except Exception as exc:
         arbeitnow_listings = []
         source_errors["arbeitnow"] = str(exc)
@@ -297,6 +312,8 @@ def ingest_live_jobs(db: Session, max_per_source: int | None = None) -> dict:
         )
         if student_only and settings.INGEST_ENABLE_REMOTEOK and not remoteok_listings:
             remoteok_listings = fetch_remoteok_jobs(max_items=safe_max, student_only=False)
+        if settings.INGEST_ENABLE_REMOTEOK and not remoteok_listings:
+            source_errors["remoteok"] = "No listings returned from RemoteOK."
     except Exception as exc:
         remoteok_listings = []
         source_errors["remoteok"] = str(exc)

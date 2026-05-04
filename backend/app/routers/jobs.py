@@ -14,6 +14,13 @@ from app.services.job_loader import ensure_minimum_jobs, ingest_live_jobs, seed_
 router = APIRouter()
 
 
+LOCATION_FOCUS_TERMS = {
+    "calgary_ab": ["calgary", "alberta", ", ab", " ab,", "canada", "canadian"],
+    "canada_remote": ["calgary", "alberta", ", ab", "canada", "canadian", "remote"],
+    "remote": ["remote"],
+}
+
+
 @router.post("/", response_model=JobResponse)
 def create_job(payload: JobCreate, db: Session = Depends(get_db)):
     existing_job = db.query(Job).filter(Job.external_id == payload.external_id).first()
@@ -49,6 +56,7 @@ def list_jobs(
     auto_fill: bool = True,
     include_baseline: bool = True,
     source: str | None = None,
+    location_focus: str = "calgary_ab",
     user_id: UUID | None = None,
     use_profile_keywords: bool = False,
     keywords: str | None = None,
@@ -66,6 +74,9 @@ def list_jobs(
         query = query.filter(Job.company.ilike(f"%{company}%"))
     if search:
         query = query.filter(Job.title.ilike(f"%{search}%"))
+    if location_focus != "all":
+        location_terms = LOCATION_FOCUS_TERMS.get(location_focus, LOCATION_FOCUS_TERMS["calgary_ab"])
+        query = query.filter(or_(*[Job.location.ilike(f"%{term}%") for term in location_terms], Job.source == "baseline_seed"))
 
     keyword_terms: list[str] = []
     if keywords:
