@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.schemas.gap_analysis import GapAnalysisOutput
+from app.services.recommendations import generate_project_recommendations
 from app.services.scorer import normalized_required_skills
 from app.services.skill_normalization import extract_missing_skills, normalize_skill_name
 
@@ -112,6 +113,9 @@ def generate_gap_analysis(
         else "No company-specific inference profile yet. Start collecting outcomes to personalize this guidance."
     )
 
+    structured_missing_skills = extract_missing_skills(candidate, job)
+    project_recommendations = generate_project_recommendations(structured_missing_skills, candidate, job)
+
     analysis = GapAnalysisOutput(
         verdict=verdict,
         verdict_explanation=_verdict_explanation(verdict),
@@ -122,7 +126,8 @@ def generate_gap_analysis(
         resume_baseline_score=scores.get("resume_baseline"),
         role_match_score=scores.get("role_match"),
         resume_tip=resume_tip,
-        missing_skills=extract_missing_skills(candidate, job),
+        missing_skills=structured_missing_skills,
+        project_recommendations=project_recommendations,
     )
 
     return analysis.model_dump()

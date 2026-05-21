@@ -24,6 +24,16 @@ type MissingSkill = {
   confidence: number;
 };
 
+type ProjectRecommendation = {
+  title: string;
+  difficulty: "Beginner" | "Intermediate" | "Advanced" | string;
+  estimated_time: string;
+  skills_covered: string[];
+  recruiter_impact: string;
+  suggested_tech_stack: string[];
+  why_this_project_helps: string;
+};
+
 type GapAnalysis = {
   verdict?: string;
   verdict_explanation?: string;
@@ -35,6 +45,7 @@ type GapAnalysis = {
   resume_tip?: string;
   resume_baseline_score?: number;
   role_match_score?: number;
+  project_recommendations?: ProjectRecommendation[];
 };
 
 type ScoreResponse = {
@@ -66,6 +77,12 @@ function impactClass(impact?: string): string {
   if (impact === "high") return "bg-rose-100 text-rose-700";
   if (impact === "medium") return "bg-amber-100 text-amber-800";
   return "bg-slate-100 text-slate-700";
+}
+
+function difficultyClass(difficulty?: string): string {
+  if (difficulty === "Advanced") return "bg-indigo-100 text-indigo-800 border-indigo-200";
+  if (difficulty === "Intermediate") return "bg-blue-100 text-blue-800 border-blue-200";
+  return "bg-emerald-100 text-emerald-800 border-emerald-200";
 }
 
 export default function JobDetailPage() {
@@ -217,10 +234,26 @@ export default function JobDetailPage() {
 
   const gaps = score?.gap_analysis?.gaps ?? [];
   const missingSkills = score?.gap_analysis?.missing_skills ?? [];
+  const recommendations = score?.gap_analysis?.project_recommendations ?? [];
   const strengths = score?.gap_analysis?.strengths ?? [];
 
   if (loading) {
-    return <div className="gc-panel rounded-2xl p-6 text-sm text-slate-500">Loading match details...</div>;
+    return (
+      <div className="grid gap-4 lg:grid-cols-5">
+        <div className="gc-panel rounded-3xl p-6 lg:col-span-3">
+          <div className="h-7 w-2/3 animate-pulse rounded bg-slate-200" />
+          <div className="mt-4 space-y-3">
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} className="h-12 animate-pulse rounded-xl bg-slate-100" />
+            ))}
+          </div>
+        </div>
+        <div className="gc-panel rounded-3xl p-6 lg:col-span-2">
+          <div className="h-6 w-1/2 animate-pulse rounded bg-slate-200" />
+          <div className="mt-4 h-40 animate-pulse rounded-xl bg-slate-100" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -320,13 +353,29 @@ export default function JobDetailPage() {
                 <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Structured Missing Skills</p>
                 <span className="text-xs font-semibold text-amber-700">{missingSkills.length} detected</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 {missingSkills.map((skill) => (
-                  <span key={`${skill.name}-${skill.category}`} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-900">
-                    {skill.name} · {skill.category} · {Math.round(skill.confidence * 100)}%
-                  </span>
+                  <div key={`${skill.name}-${skill.category}`} className="rounded-xl border border-amber-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-3 text-xs font-semibold">
+                      <span className="text-amber-950">{skill.name}</span>
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">{skill.category}</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="h-2 flex-1 rounded-full bg-amber-100">
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+                          style={{ width: `${Math.max(8, Math.round(skill.confidence * 100))}%` }}
+                        />
+                      </div>
+                      <span className="text-[11px] font-bold text-amber-800">{Math.round(skill.confidence * 100)}%</span>
+                    </div>
+                  </div>
                 ))}
               </div>
+            </div>
+          ) : score ? (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+              No missing skills were detected from the structured job requirements.
             </div>
           ) : null}
           <div className="mt-4 space-y-3">
@@ -377,6 +426,70 @@ export default function JobDetailPage() {
           ) : null}
         </article>
       </section>
+
+      <section className="gc-panel rounded-3xl p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Portfolio Project Recommendations</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Concrete project ideas generated from the missing skills in this match analysis.
+            </p>
+          </div>
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+            Phase 1 engine
+          </span>
+        </div>
+
+        {computing ? (
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {[1, 2, 3].map((item) => (
+              <div key={item} className="h-56 animate-pulse rounded-2xl bg-slate-100" />
+            ))}
+          </div>
+        ) : recommendations.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+            Recommendations appear after scoring finds missing skills. If none appear, this role already has strong skill alignment.
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            {recommendations.map((recommendation) => (
+              <article key={recommendation.title} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-sm font-bold leading-6 text-slate-950">{recommendation.title}</h3>
+                  <span className={`shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${difficultyClass(recommendation.difficulty)}`}>
+                    {recommendation.difficulty}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs font-semibold text-slate-500">Estimated time: {recommendation.estimated_time}</p>
+                <p className="mt-3 text-sm text-slate-700">{recommendation.why_this_project_helps}</p>
+
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Skills Covered</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {recommendation.skills_covered.map((skill) => (
+                      <span key={skill} className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Suggested Stack</p>
+                  <p className="mt-1 text-xs text-slate-600">{recommendation.suggested_tech_stack.join(", ")}</p>
+                </div>
+
+                <div className="mt-4 rounded-xl bg-slate-50 p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Recruiter Impact</p>
+                  <p className="mt-1 text-xs text-slate-700">{recommendation.recruiter_impact}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
+
+

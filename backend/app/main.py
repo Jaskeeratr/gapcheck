@@ -2,9 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import admin_jobs, applications, gaps, jobs, resume, scores, users
+from app.core.errors import register_exception_handlers
+from app.core.logging import configure_logging
+from app.routers import admin_jobs, applications, gaps, health, jobs, recommendations, resume, scores, users
+
+configure_logging()
 
 app = FastAPI(title="GapCheck API", version="0.1.0")
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +26,8 @@ app.include_router(resume.router, prefix="/resume", tags=["resume"])
 app.include_router(scores.router, prefix="/scores", tags=["scores"])
 app.include_router(gaps.router, prefix="/gaps", tags=["gaps"])
 app.include_router(applications.router, prefix="/applications", tags=["applications"])
+app.include_router(recommendations.router, prefix="/recommendations", tags=["recommendations"])
+app.include_router(health.router, prefix="/health", tags=["health"])
 
 
 @app.get("/")

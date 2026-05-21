@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.recommendation import ProjectRecommendation
+
 
 SkillCategory = Literal["Technology", "Framework", "Cloud", "Database", "DevOps", "Soft Skill"]
 
@@ -25,3 +27,4 @@ class GapAnalysisOutput(BaseModel):
     role_match_score: float | None = None
     resume_tip: str
     missing_skills: list[MissingSkill] = Field(default_factory=list)
+    project_recommendations: list[ProjectRecommendation] = Field(default_factory=list)

@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gapcheck
+      POSTGRES_USER: gapcheck
+      POSTGRES_PASSWORD: gapcheck
+    ports:
+      - "5432:5432"
+    volumes:
+      - gapcheck-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gapcheck -d gapcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: postgresql://gapcheck:gapcheck@db:5432/gapcheck
+      FRONTEND_URL: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080
+      ENVIRONMENT: development
+      INGEST_ENABLE_ARBEITNOW: "true"
+      INGEST_ENABLE_REMOTIVE: "true"
+      INGEST_ENABLE_REMOTEOK: "true"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  gapcheck-db:
