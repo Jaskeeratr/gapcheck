@@ -99,6 +99,11 @@ function toNumberOrZero(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatFileSize(size: number): string {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function normalizeProject(project: Partial<ProfileProject>): ProfileProject {
   return {
     name: project.name ?? "",
@@ -304,6 +309,7 @@ export default function ProfilePage() {
       applyProfileToEditor(uploadedProfile);
       setResumeFileName(selectedFile.name);
       setUploadedAt(now);
+      setSelectedFile(null);
       setMessage("Resume uploaded. Parsing is handled on the backend.");
 
       writeCachedProfile({
@@ -399,6 +405,17 @@ export default function ProfilePage() {
   const projectCount = useMemo(() => projects.length, [projects]);
   const skillsCount = useMemo(() => skills.length, [skills]);
   const domainCount = useMemo(() => domains.length, [domains]);
+  const experienceCount = useMemo(() => experienceItems.length, [experienceItems]);
+  const hasEducation = Boolean(degreeInput || programInput || universityInput || yearInput);
+  const parseQualityItems = [
+    { label: "Skills", value: skillsCount, ready: skillsCount > 0 },
+    { label: "Projects", value: projectCount, ready: projectCount > 0 },
+    { label: "Experience", value: experienceCount, ready: experienceCount > 0 },
+    { label: "Keywords", value: domainCount, ready: domainCount > 0 },
+  ];
+  const completedParseItems = parseQualityItems.filter((item) => item.ready).length + (hasEducation ? 1 : 0);
+  const profileCompleteness = Math.round((completedParseItems / 5) * 100);
+  const uploadDisabled = uploading || loadingProfile || !selectedFile;
 
   return (
     <div className="grid gap-6 lg:grid-cols-5">
@@ -419,35 +436,96 @@ export default function ProfilePage() {
         {error ? <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
 
         {activeTab === "resume" ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6">
-            <p className="text-sm font-semibold text-slate-700">Resume PDF</p>
-            <p className="mt-1 text-xs text-slate-500">Upload once, then replace anytime after edits.</p>
-
-            {profile ? (
-              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-                Resume on file{resumeFileName ? `: ${resumeFileName}` : ""}
-                {uploadedAt ? ` - Uploaded ${new Date(uploadedAt).toLocaleString()}` : ""}
+          <div className="mt-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-bold text-slate-900">Resume PDF</p>
+                  <p className="mt-1 text-sm text-slate-500">Upload a PDF. The backend parses it into editable skills, projects, experience, education, and job keywords.</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${profile ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                  {profile ? "Resume active" : "No resume yet"}
+                </span>
               </div>
-            ) : null}
 
-            <input
-              type="file"
-              accept=".pdf,application/pdf"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
-              className="mt-4 block w-full rounded-lg border border-slate-300 bg-white p-2 text-sm text-slate-700"
-            />
+              <label
+                htmlFor="resume-upload"
+                className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 px-5 py-8 text-center transition hover:border-blue-400 hover:from-blue-100 hover:to-cyan-100"
+              >
+                <span className="rounded-2xl bg-white px-4 py-3 text-2xl shadow-sm">PDF</span>
+                <span className="mt-3 text-sm font-bold text-slate-900">{selectedFile ? selectedFile.name : "Choose your resume PDF"}</span>
+                <span className="mt-1 text-xs text-slate-500">
+                  {selectedFile ? `${formatFileSize(selectedFile.size)} ready to upload` : "Click to select a PDF from your computer"}
+                </span>
+              </label>
+              <input
+                id="resume-upload"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+                className="sr-only"
+              />
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button onClick={handleUpload} disabled={uploading || loadingProfile} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60">
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
+              {selectedFile ? (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-950">{selectedFile.name}</p>
+                    <p className="text-xs text-blue-700">{formatFileSize(selectedFile.size)} · PDF selected</p>
+                  </div>
+                  <button type="button" onClick={() => setSelectedFile(null)} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">
+                    Clear
+                  </button>
+                </div>
+              ) : null}
 
-              <button onClick={handleRemoveResume} disabled={removing || !profile} className="rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60">
-                {removing ? "Removing..." : "Remove Resume"}
-              </button>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button onClick={handleUpload} disabled={uploadDisabled} className="rounded-xl bg-gradient-to-r from-blue-700 to-cyan-600 px-5 py-3 text-sm font-bold text-white transition hover:from-blue-800 hover:to-cyan-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {uploading ? "Parsing in backend..." : profile ? "Replace Resume" : "Upload Resume"}
+                </button>
+
+                <button onClick={handleRemoveResume} disabled={removing || !profile} className="rounded-xl border border-rose-300 bg-white px-5 py-3 text-sm font-bold text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50">
+                  {removing ? "Removing..." : "Remove Resume"}
+                </button>
+              </div>
+
+              {profile ? (
+                <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-sm font-bold text-emerald-900">Current resume</p>
+                  <p className="mt-1 text-sm text-emerald-800">{resumeFileName ?? "Resume stored in backend"}</p>
+                  {uploadedAt ? <p className="mt-1 text-xs text-emerald-700">Last uploaded {new Date(uploadedAt).toLocaleString()}</p> : null}
+                </div>
+              ) : null}
+
+              {userId ? <p className="mt-4 text-xs text-slate-400">Local demo user: {userId}</p> : null}
             </div>
 
-            {userId ? <p className="mt-3 text-xs text-slate-500">User ID: {userId}</p> : null}
+            <div className="rounded-2xl border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">
+              <p className="text-sm font-bold text-cyan-200">Backend parsing pipeline</p>
+              <div className="mt-5 space-y-4">
+                {[
+                  { step: "1", title: "Upload PDF", text: selectedFile ? "PDF selected and ready." : "Choose a PDF to begin." },
+                  { step: "2", title: "Extract resume text", text: profile ? "Resume text has been parsed." : "Backend extracts content after upload." },
+                  { step: "3", title: "Normalize profile data", text: profile ? "Skills, projects, experience, and keywords are editable." : "Parsed data appears in the Parsed Data tab." },
+                  { step: "4", title: "Power scoring", text: profile ? "Job matches can use your parsed profile." : "Upload once to unlock scoring." },
+                ].map((item) => (
+                  <div key={item.step} className="flex gap-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-400 text-sm font-black text-slate-950">{item.step}</span>
+                    <div>
+                      <p className="text-sm font-bold">{item.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-300">{item.text}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab("parsed")}
+                disabled={!profile}
+                className="mt-6 w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Review Parsed Data
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mt-6 space-y-6 rounded-2xl border border-slate-200 bg-white p-5">
@@ -592,12 +670,43 @@ export default function ProfilePage() {
       </section>
 
       <aside className="gc-panel rounded-3xl p-6 lg:col-span-2">
-        <h2 className="text-lg font-bold text-slate-900">Profile Health</h2>
-        <ul className="mt-4 space-y-3 text-sm text-slate-600">
-          <li className="rounded-lg bg-slate-50 p-3">Skills parsed: {skillsCount}</li>
-          <li className="rounded-lg bg-slate-50 p-3">Projects parsed: {projectCount}</li>
-          <li className="rounded-lg bg-slate-50 p-3">Domains inferred: {domainCount}</li>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Profile Health</h2>
+            <p className="mt-1 text-xs text-slate-500">How much usable scoring data GapCheck has from your resume.</p>
+          </div>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-black text-blue-700">{profileCompleteness}%</span>
+        </div>
+
+        <div className="mt-5 h-2 rounded-full bg-slate-100">
+          <div className="h-2 rounded-full bg-gradient-to-r from-blue-700 to-cyan-500" style={{ width: `${profileCompleteness}%` }} />
+        </div>
+
+        <ul className="mt-5 space-y-3 text-sm text-slate-600">
+          {parseQualityItems.map((item) => (
+            <li key={item.label} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+              <span className="font-semibold text-slate-700">{item.label}</span>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${item.ready ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                {item.value}
+              </span>
+            </li>
+          ))}
+          <li className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-4 py-3 shadow-sm">
+            <span className="font-semibold text-slate-700">Education</span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${hasEducation ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+              {hasEducation ? "Ready" : "Missing"}
+            </span>
+          </li>
         </ul>
+
+        <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <p className="text-sm font-bold text-blue-950">Recommended workflow</p>
+          <ol className="mt-3 space-y-2 text-xs leading-relaxed text-blue-900">
+            <li>1. Upload or replace your PDF resume.</li>
+            <li>2. Review parsed data and fix anything the parser missed.</li>
+            <li>3. Use Job Keywords to control which roles the board prioritizes.</li>
+          </ol>
+        </div>
       </aside>
     </div>
   );

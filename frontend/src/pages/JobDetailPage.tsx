@@ -18,10 +18,17 @@ type GapItem = {
   timeframe: string;
 };
 
+type MissingSkill = {
+  name: string;
+  category: string;
+  confidence: number;
+};
+
 type GapAnalysis = {
   verdict?: string;
   verdict_explanation?: string;
   gaps?: GapItem[];
+  missing_skills?: MissingSkill[];
   strengths?: string[];
   company_insight?: string;
   apply_recommendation?: boolean;
@@ -209,6 +216,7 @@ export default function JobDetailPage() {
   );
 
   const gaps = score?.gap_analysis?.gaps ?? [];
+  const missingSkills = score?.gap_analysis?.missing_skills ?? [];
   const strengths = score?.gap_analysis?.strengths ?? [];
 
   if (loading) {
@@ -306,6 +314,21 @@ export default function JobDetailPage() {
       <section className="grid gap-6 lg:grid-cols-2">
         <article className="gc-panel rounded-3xl p-5">
           <h2 className="text-lg font-bold text-slate-900">What Needs Work</h2>
+          {missingSkills.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-amber-800">Structured Missing Skills</p>
+                <span className="text-xs font-semibold text-amber-700">{missingSkills.length} detected</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {missingSkills.map((skill) => (
+                  <span key={`${skill.name}-${skill.category}`} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-900">
+                    {skill.name} · {skill.category} · {Math.round(skill.confidence * 100)}%
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-4 space-y-3">
             {gaps.length === 0 ? (
               <p className="text-sm text-slate-600">No gaps available yet.</p>

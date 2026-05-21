@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.schemas.gap_analysis import GapAnalysisOutput
 from app.services.scorer import normalized_required_skills
+from app.services.skill_normalization import extract_missing_skills, normalize_skill_name
 
 
 def _verdict_for_score(overall_score: float) -> str:
@@ -40,17 +42,17 @@ def generate_gap_analysis(
     company_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     required_skills = normalized_required_skills(job.get("required_skills"))
-    candidate_skills = {skill.lower().strip() for skill in (candidate.get("skills") or []) if skill}
+    candidate_skills = {normalize_skill_name(skill).lower().strip() for skill in (candidate.get("skills") or []) if skill}
 
     missing_skills = [
-        row for row in required_skills if str(row["skill"]).lower().strip() not in candidate_skills
+        row for row in required_skills if normalize_skill_name(str(row["skill"])).lower().strip() not in candidate_skills
     ]
     missing_skills.sort(key=lambda row: float(row["weight"]), reverse=True)
 
     gaps: list[dict[str, Any]] = []
     for row in missing_skills[:4]:
         weight = float(row["weight"])
-        skill = str(row["skill"])
+        skill = normalize_skill_name(str(row["skill"]))
         score_lost = round(weight * 100 * 0.35, 2)
         gaps.append(
             {
@@ -88,9 +90,9 @@ def generate_gap_analysis(
         )
 
     matched_skills = [
-        str(row["skill"])
+        normalize_skill_name(str(row["skill"]))
         for row in required_skills
-        if str(row["skill"]).lower().strip() in candidate_skills
+        if normalize_skill_name(str(row["skill"])).lower().strip() in candidate_skills
     ]
     strengths = [f"Strong alignment on {skill}" for skill in matched_skills[:3]]
     if not strengths:
@@ -110,14 +112,17 @@ def generate_gap_analysis(
         else "No company-specific inference profile yet. Start collecting outcomes to personalize this guidance."
     )
 
-    return {
-        "verdict": verdict,
-        "verdict_explanation": _verdict_explanation(verdict),
-        "gaps": gaps,
-        "strengths": strengths,
-        "company_insight": company_insight,
-        "apply_recommendation": scores.get("overall", 0) >= 55,
-        "resume_baseline_score": scores.get("resume_baseline"),
-        "role_match_score": scores.get("role_match"),
-        "resume_tip": resume_tip,
-    }
+    analysis = GapAnalysisOutput(
+        verdict=verdict,
+        verdict_explanation=_verdict_explanation(verdict),
+        gaps=gaps,
+        strengths=strengths,
+        company_insight=company_insight,
+        apply_recommendation=scores.get("overall", 0) >= 55,
+        resume_baseline_score=scores.get("resume_baseline"),
+        role_match_score=scores.get("role_match"),
+        resume_tip=resume_tip,
+        missing_skills=extract_missing_skills(candidate, job),
+    )
+
+    return analysis.model_dump()
