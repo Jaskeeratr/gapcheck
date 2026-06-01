@@ -1,9 +1,10 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+﻿import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import JobBoardPage from "./pages/JobBoardPage";
 import ProfilePage from "./pages/ProfilePage";
 import JobDetailPage from "./pages/JobDetailPage";
 import TrackerPage from "./pages/TrackerPage";
+import GapCheckCaseStudyPage from "./pages/GapCheckCaseStudyPage";
 
 export default function App() {
   return (
@@ -19,9 +20,13 @@ export default function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/jobs/:id" element={<JobDetailPage />} />
             <Route path="/tracker" element={<TrackerPage />} />
+            <Route path="/case-study/gapcheck" element={<GapCheckCaseStudyPage />} />
           </Routes>
         </main>
       </div>
     </BrowserRouter>
   );
 }
+
+
+

@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
 import { api } from "../api/client";
-import JobCard from "../components/JobCard";
+import JobBoardHero from "../components/job-board/JobBoardHero";
+import JobGrid from "../components/job-board/JobGrid";
+import RecommendationTabs from "../components/job-board/RecommendationTabs";
+import SourceStats from "../components/job-board/SourceStats";
+import type { LocationFocus, SourceFilter } from "../components/job-board/JobFilters";
 import type { Application } from "../types/application";
 import type { Job } from "../types/job";
 
@@ -42,9 +46,7 @@ const FALLBACK_JOBS: Job[] = [
   },
 ];
 
-type DevUser = {
-  id: string;
-};
+type DevUser = { id: string };
 
 type CandidateProfile = {
   skills?: string[] | null;
@@ -66,9 +68,7 @@ type IngestStats = {
 
 type ScoreResponse = {
   overall_score: number;
-  gap_analysis?: {
-    verdict?: string;
-  } | null;
+  gap_analysis?: { verdict?: string } | null;
 };
 
 type ScoreBadge = {
@@ -78,7 +78,6 @@ type ScoreBadge = {
 };
 
 type RecommendationView = "recommended" | "close" | "reach" | "all";
-type LocationFocus = "calgary_ab" | "canada_remote" | "remote" | "all";
 
 function badgeForScore(overallScore: number): ScoreBadge {
   if (overallScore >= 90) return { label: "Elite Match", className: "bg-emerald-100 text-emerald-800 border-emerald-300" };
@@ -99,18 +98,7 @@ export default function JobBoardPage() {
   const [domainFilter, setDomainFilter] = useState("all");
   const [locationFocus, setLocationFocus] = useState<LocationFocus>("calgary_ab");
   const [recommendationView, setRecommendationView] = useState<RecommendationView>("recommended");
-  const [sourceFilter, setSourceFilter] = useState<
-    | "all"
-    | "baseline_seed"
-    | "greenhouse"
-    | "lever"
-    | "remotive"
-    | "arbeitnow"
-    | "remoteok"
-    | "indeed"
-    | "linkedin"
-    | "ucalgary"
-  >("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [includeBaseline, setIncludeBaseline] = useState(true);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -143,8 +131,7 @@ export default function JobBoardPage() {
           if (!cancelled) {
             setHasResumeProfile(true);
             const rawTerms = [...(profileResponse.data.domains ?? []), ...(profileResponse.data.skills ?? [])];
-            const normalizedTerms = Array.from(new Set(rawTerms.map((value) => value.trim()).filter(Boolean)));
-            setProfileKeywords(normalizedTerms);
+            setProfileKeywords(Array.from(new Set(rawTerms.map((value) => value.trim()).filter(Boolean))));
           }
         } catch (error: unknown) {
           const status = (error as { response?: { status?: number } })?.response?.status;
@@ -154,9 +141,7 @@ export default function JobBoardPage() {
           }
         }
       } catch {
-        if (!cancelled) {
-          setApiError("Could not initialize user session from backend.");
-        }
+        if (!cancelled) setApiError("Could not initialize user session from backend.");
       }
     }
 
@@ -183,18 +168,14 @@ export default function JobBoardPage() {
             use_profile_keywords: Boolean(userId && useProfileKeywords && profileKeywords.length > 0),
           },
         });
-        if (!cancelled) {
-          setJobs(response.data);
-        }
+        if (!cancelled) setJobs(response.data);
       } catch {
         if (!cancelled) {
           setApiError("Could not reach backend jobs API. Showing demo jobs for now.");
           setJobs(FALLBACK_JOBS);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 
@@ -210,12 +191,9 @@ export default function JobBoardPage() {
       if (!userId) return;
       try {
         const response = await api.get<Application[]>(`/applications/user/${userId}`);
-        if (cancelled) return;
-        setTrackedJobIds(new Set(response.data.map((app) => app.job_id)));
+        if (!cancelled) setTrackedJobIds(new Set(response.data.map((app) => app.job_id)));
       } catch {
-        if (!cancelled) {
-          // silent fallback
-        }
+        // Application tracking is secondary to the job board feed.
       }
     }
     loadApplications();
@@ -238,18 +216,12 @@ export default function JobBoardPage() {
         status: "applied",
         notes: "Tracked from GapCheck job board",
       });
-      setTrackedJobIds((prev) => {
-        const next = new Set(prev);
-        next.add(jobId);
-        return next;
-      });
+      setTrackedJobIds((prev) => new Set(prev).add(jobId));
     } catch (unknownError: unknown) {
       let message = "Could not track this application.";
       if (axios.isAxiosError(unknownError)) {
         const detail = unknownError.response?.data?.detail;
-        if (typeof detail === "string" && detail.trim()) {
-          message = detail;
-        }
+        if (typeof detail === "string" && detail.trim()) message = detail;
       }
       setApiError(message);
     } finally {
@@ -284,31 +256,19 @@ export default function JobBoardPage() {
 
       for (const attempt of candidateCalls) {
         try {
-          const response =
-            attempt.method === "post"
-              ? await api.post<IngestStats>(attempt.route, null, { headers })
-              : await api.get<IngestStats>(attempt.route, { headers });
+          const response = attempt.method === "post" ? await api.post<IngestStats>(attempt.route, null, { headers }) : await api.get<IngestStats>(attempt.route, { headers });
           stats = response.data;
           break;
         } catch (unknownError: unknown) {
-          if (!axios.isAxiosError(unknownError)) {
-            throw unknownError;
-          }
-
+          if (!axios.isAxiosError(unknownError)) throw unknownError;
           const status = unknownError.response?.status;
           triedStatuses.push(`${attempt.method.toUpperCase()} ${attempt.route} -> ${status ?? "ERR"}`);
-          // Try compatibility fallback for older deployments and route styles.
-          // 422 commonly means /jobs/{job_id} caught "ingest-live" on older backends.
-          if (status === 404 || status === 405 || status === 422 || status === 307 || status === 308) {
-            continue;
-          }
+          if (status === 404 || status === 405 || status === 422 || status === 307 || status === 308) continue;
           throw unknownError;
         }
       }
 
-      if (!stats) {
-        throw new Error(`No ingest endpoint accepted this request. Tried: ${triedStatuses.join("; ")}`);
-      }
+      if (!stats) throw new Error(`No ingest endpoint accepted this request. Tried: ${triedStatuses.join("; ")}`);
 
       setIngestMessage(
         `Live ingest complete: fetched ${stats.fetched} (Greenhouse ${stats.greenhouse_fetched ?? 0}, Lever ${stats.lever_fetched ?? 0}, Remotive ${stats.remotive_fetched ?? 0}, Arbeitnow ${stats.arbeitnow_fetched ?? 0}, RemoteOK ${stats.remoteok_fetched ?? 0}). Inserted ${stats.inserted}, updated ${stats.updated}.`,
@@ -324,11 +284,8 @@ export default function JobBoardPage() {
       let message = "Live ingest failed.";
       if (axios.isAxiosError(unknownError)) {
         const detail = unknownError.response?.data?.detail;
-        if (typeof detail === "string" && detail.trim()) {
-          message = `Live ingest failed: ${detail}`;
-        } else if (unknownError.response?.status) {
-          message = `Live ingest failed (HTTP ${unknownError.response.status}).`;
-        }
+        if (typeof detail === "string" && detail.trim()) message = `Live ingest failed: ${detail}`;
+        else if (unknownError.response?.status) message = `Live ingest failed (HTTP ${unknownError.response.status}).`;
       } else if (unknownError instanceof Error && unknownError.message) {
         message = `Live ingest failed: ${unknownError.message}`;
       }
@@ -342,36 +299,21 @@ export default function JobBoardPage() {
     let cancelled = false;
 
     async function computeScoresForBoard(): Promise<void> {
-      if (!userId || !hasResumeProfile || jobs.length === 0) {
-        return;
-      }
+      if (!userId || !hasResumeProfile || jobs.length === 0) return;
 
       setScoringInProgress(true);
-      const subset = jobs;
-      const settled = await Promise.allSettled(
-        subset.map((job) =>
-          api.post<ScoreResponse>("/scores/compute", {
-            user_id: userId,
-            job_id: job.id,
-          }),
-        ),
-      );
-
+      const settled = await Promise.allSettled(jobs.map((job) => api.post<ScoreResponse>("/scores/compute", { user_id: userId, job_id: job.id })));
       if (cancelled) return;
 
       const nextMap: Record<string, ScoreBadge> = {};
       settled.forEach((result, index) => {
-        const job = subset[index];
+        const job = jobs[index];
         if (result.status !== "fulfilled") {
           nextMap[job.id] = unscoredBadge();
           return;
         }
         const data = result.value.data;
-        if (typeof data.overall_score === "number") {
-          nextMap[job.id] = { ...badgeForScore(data.overall_score), score: data.overall_score };
-        } else {
-          nextMap[job.id] = unscoredBadge();
-        }
+        nextMap[job.id] = typeof data.overall_score === "number" ? { ...badgeForScore(data.overall_score), score: data.overall_score } : unscoredBadge();
       });
 
       setScoreByJobId(nextMap);
@@ -384,57 +326,37 @@ export default function JobBoardPage() {
     };
   }, [jobs, userId, hasResumeProfile]);
 
-  const sourceCounts = useMemo(() => {
-    return jobs.reduce<Record<string, number>>((counts, job) => {
-      const key = job.source ?? "unknown";
-      counts[key] = (counts[key] ?? 0) + 1;
-      return counts;
-    }, {});
-  }, [jobs]);
+  const sourceCounts = useMemo(() => jobs.reduce<Record<string, number>>((counts, job) => {
+    const key = job.source ?? "unknown";
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {}), [jobs]);
 
-  const domainOptions = useMemo(() => {
-    return Array.from(new Set(jobs.map((job) => job.domain).filter((value): value is string => Boolean(value)))).sort();
-  }, [jobs]);
+  const domainOptions = useMemo(() => Array.from(new Set(jobs.map((job) => job.domain).filter((value): value is string => Boolean(value)))).sort(), [jobs]);
 
-  const recommendationCounts = useMemo(() => {
-    return jobs.reduce(
-      (counts, job) => {
-        const score = scoreByJobId[job.id]?.score;
-        if (typeof score !== "number") {
-          counts.all += 1;
-          return counts;
-        }
-        if (score >= 70) counts.recommended += 1;
-        else if (score >= 50) counts.close += 1;
-        else counts.reach += 1;
+  const recommendationCounts = useMemo(() => jobs.reduce(
+    (counts, job) => {
+      const score = scoreByJobId[job.id]?.score;
+      if (typeof score !== "number") {
         counts.all += 1;
         return counts;
-      },
-      { recommended: 0, close: 0, reach: 0, all: 0 },
-    );
-  }, [jobs, scoreByJobId]);
+      }
+      if (score >= 70) counts.recommended += 1;
+      else if (score >= 50) counts.close += 1;
+      else counts.reach += 1;
+      counts.all += 1;
+      return counts;
+    },
+    { recommended: 0, close: 0, reach: 0, all: 0 },
+  ), [jobs, scoreByJobId]);
 
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const nextJobs = jobs.filter((job) => {
-      const sourceMatches = sourceFilter === "all" || (job.source ?? "").toLowerCase() === sourceFilter;
-      if (!sourceMatches) return false;
-      const domainMatches = domainFilter === "all" || (job.domain ?? "").toLowerCase() === domainFilter;
-      if (!domainMatches) return false;
-
+      if (sourceFilter !== "all" && (job.source ?? "").toLowerCase() !== sourceFilter) return false;
+      if (domainFilter !== "all" && (job.domain ?? "").toLowerCase() !== domainFilter) return false;
       if (!normalizedQuery) return true;
-      const title = job.title.toLowerCase();
-      const company = job.company.toLowerCase();
-      const domain = (job.domain ?? "").toLowerCase();
-      const description = (job.description ?? "").toLowerCase();
-      const roleType = (job.role_type ?? "").toLowerCase();
-      return (
-        title.includes(normalizedQuery) ||
-        company.includes(normalizedQuery) ||
-        domain.includes(normalizedQuery) ||
-        description.includes(normalizedQuery) ||
-        roleType.includes(normalizedQuery)
-      );
+      return [job.title, job.company, job.domain, job.description, job.role_type].some((value) => (value ?? "").toLowerCase().includes(normalizedQuery));
     });
 
     const filteredByRecommendation = nextJobs.filter((job) => {
@@ -455,247 +377,63 @@ export default function JobBoardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="gc-panel-strong rounded-3xl p-6">
-        <p className="text-xs font-bold uppercase tracking-[0.24em] text-blue-700">Calgary Internship Intelligence</p>
-        <h1 className="gc-text-gradient mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-          Find where you are strong, then close the gap fast
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm text-slate-600 sm:text-base">
-          GapCheck surfaces current listings, predicts your match potential, and helps you decide what to apply to first.
-        </p>
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-700">
-          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1">Multi-source ingest</span>
-          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1">Resume-aware scoring</span>
-          <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1">Keyword targeting</span>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-[1fr_190px_190px_190px_auto]">
-          <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Search title, company, skills, description</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="ex: marketing, finance, react, sales"
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition placeholder:text-slate-400 focus:ring-2"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Location Focus</span>
-            <select
-              value={locationFocus}
-              onChange={(event) => setLocationFocus(event.target.value as LocationFocus)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
-            >
-              <option value="calgary_ab">Calgary / Alberta</option>
-              <option value="canada_remote">Canada + Remote</option>
-              <option value="remote">Remote Only</option>
-              <option value="all">All Locations</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Job Family</span>
-            <select
-              value={domainFilter}
-              onChange={(event) => setDomainFilter(event.target.value)}
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
-            >
-              <option value="all">All Job Families</option>
-              {domainOptions.map((domain) => (
-                <option key={domain} value={domain.toLowerCase()}>
-                  {domain}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">Source</span>
-            <select
-              value={sourceFilter}
-              onChange={(event) =>
-                setSourceFilter(
-                  event.target.value as
-                    | "all"
-                    | "baseline_seed"
-                    | "greenhouse"
-                    | "lever"
-                    | "remotive"
-                    | "arbeitnow"
-                    | "remoteok"
-                    | "indeed"
-                    | "linkedin"
-                    | "ucalgary",
-                )
-              }
-              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none ring-blue-200 transition focus:ring-2"
-            >
-              <option value="all">All Sources</option>
-              <option value="baseline_seed">Baseline Roles</option>
-              <option value="greenhouse">Greenhouse</option>
-              <option value="lever">Lever</option>
-              <option value="remotive">Remotive</option>
-              <option value="arbeitnow">Arbeitnow</option>
-              <option value="remoteok">RemoteOK</option>
-              <option value="indeed">Indeed</option>
-              <option value="linkedin">LinkedIn</option>
-              <option value="ucalgary">UCalgary</option>
-            </select>
-          </label>
-
-          <div className="flex flex-col justify-end gap-2">
-            <button
-              onClick={handleRefreshLiveJobs}
-              disabled={ingesting}
-              className="rounded-xl bg-gradient-to-r from-blue-700 to-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-blue-800 hover:to-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {ingesting ? "Refreshing..." : "Refresh Live Jobs"}
-            </button>
-            {lastRefreshedAt ? (
-              <p className="text-right text-[11px] font-medium text-slate-500">Last refresh {new Date(lastRefreshedAt).toLocaleTimeString()}</p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            id="include-baseline"
-            type="checkbox"
-            checked={includeBaseline}
-            onChange={(event) => setIncludeBaseline(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
-          <label htmlFor="include-baseline" className="text-sm text-slate-600">
-            Include baseline benchmark roles
-          </label>
-        </div>
-
-        {hasResumeProfile ? (
-          <div className="mt-3">
-            <div className="flex items-center gap-2">
-              <input
-                id="use-profile-keywords"
-                type="checkbox"
-                checked={useProfileKeywords}
-                onChange={(event) => setUseProfileKeywords(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300"
-              />
-              <label htmlFor="use-profile-keywords" className="text-sm text-slate-600">
-                Use profile keywords to personalize listings
-              </label>
-            </div>
-            {profileKeywords.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {profileKeywords.slice(0, 10).map((keyword) => (
-                  <span key={keyword} className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                    {keyword}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-slate-500">Add domains/skills on the Resume page to drive keyword targeting.</p>
-            )}
-          </div>
-        ) : null}
-      </section>
+      <JobBoardHero
+        query={query}
+        setQuery={setQuery}
+        domainFilter={domainFilter}
+        setDomainFilter={setDomainFilter}
+        domainOptions={domainOptions}
+        locationFocus={locationFocus}
+        setLocationFocus={setLocationFocus}
+        sourceFilter={sourceFilter}
+        setSourceFilter={setSourceFilter}
+        includeBaseline={includeBaseline}
+        setIncludeBaseline={setIncludeBaseline}
+        hasResumeProfile={hasResumeProfile}
+        profileKeywords={profileKeywords}
+        useProfileKeywords={useProfileKeywords}
+        setUseProfileKeywords={setUseProfileKeywords}
+        ingesting={ingesting}
+        lastRefreshedAt={lastRefreshedAt}
+        onRefreshLiveJobs={handleRefreshLiveJobs}
+      />
 
       <section className="gc-panel rounded-3xl p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-xl font-bold text-slate-900">Job Board</h2>
-          <p className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-600">
-            {filteredJobs.length} active roles
-          </p>
+          <p className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-600">{filteredJobs.length} active roles</p>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          {[
-            { key: "recommended", label: "Best Matches", count: recommendationCounts.recommended },
-            { key: "close", label: "Close Matches", count: recommendationCounts.close },
-            { key: "reach", label: "Reach Roles", count: recommendationCounts.reach },
-            { key: "all", label: "All Roles", count: recommendationCounts.all },
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setRecommendationView(item.key as RecommendationView)}
-              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                recommendationView === item.key
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {item.label} <span className="ml-1 opacity-75">{item.count}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mb-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-2 lg:grid-cols-5">
-          {["greenhouse", "lever", "remotive", "arbeitnow", "remoteok"].map((source) => (
-            <div key={source} className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-              <span className="capitalize">{source}</span>: {sourceCounts[source] ?? 0}
-            </div>
-          ))}
-        </div>
-        <p className="mb-4 text-xs text-slate-500">
-          Default view is Calgary/Alberta-first. Switch location focus to Canada + Remote or All Locations when you want a wider board.
-        </p>
+        <RecommendationTabs recommendationView={recommendationView} setRecommendationView={setRecommendationView} recommendationCounts={recommendationCounts} />
+        <SourceStats sourceCounts={sourceCounts} />
 
         {!hasResumeProfile ? (
           <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
-            Upload your resume on the{" "}
-            <Link to="/profile" className="underline decoration-2 underline-offset-2">
-              Resume page
-            </Link>{" "}
-            to unlock full multi-level scoring.
+            Upload your resume on the <Link to="/profile" className="underline decoration-2 underline-offset-2">Resume page</Link> to unlock full multi-level scoring.
           </div>
         ) : null}
 
-        {apiError ? (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-            {apiError}
-          </div>
-        ) : null}
+        {apiError ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">{apiError}</div> : null}
         {ingestMessage ? (
           <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
             {ingestMessage}
-            {lastIngestStats?.source_errors && Object.keys(lastIngestStats.source_errors).length > 0 ? (
-              <p className="mt-2 text-xs text-emerald-900">
-                Some sources returned errors. Check backend logs before relying on source coverage.
-              </p>
-            ) : null}
+            {lastIngestStats?.source_errors && Object.keys(lastIngestStats.source_errors).length > 0 ? <p className="mt-2 text-xs text-emerald-900">Some sources returned errors. Check backend logs before relying on source coverage.</p> : null}
           </div>
         ) : null}
 
-        {loading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {[1, 2, 3, 4].map((key) => (
-              <div key={key} className="h-48 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />
-            ))}
-          </div>
-        ) : filteredJobs.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center">
-            <p className="text-sm font-medium text-slate-700">No jobs matched that filter. Try a wider search.</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {filteredJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                scoreLocked={!hasResumeProfile}
-                scoring={hasResumeProfile && scoringInProgress && !scoreByJobId[job.id]}
-                matchLabel={scoreByJobId[job.id]?.label}
-                matchClassName={scoreByJobId[job.id]?.className}
-                matchScore={scoreByJobId[job.id]?.score}
-                profileKeywords={profileKeywords}
-                tracked={trackedJobIds.has(job.id)}
-                tracking={trackingJobIds.has(job.id)}
-                onTrack={handleTrackApplication}
-              />
-            ))}
-          </div>
-        )}
+        <JobGrid
+          loading={loading}
+          jobs={filteredJobs}
+          hasResumeProfile={hasResumeProfile}
+          scoringInProgress={scoringInProgress}
+          scoreByJobId={scoreByJobId}
+          profileKeywords={profileKeywords}
+          trackedJobIds={trackedJobIds}
+          trackingJobIds={trackingJobIds}
+          onTrack={handleTrackApplication}
+        />
       </section>
     </div>
   );
 }
+

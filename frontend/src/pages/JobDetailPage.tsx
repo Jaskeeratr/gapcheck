@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 
@@ -58,6 +58,26 @@ type ScoreResponse = {
   gap_analysis?: GapAnalysis | null;
 };
 
+type CandidateProfile = {
+  skills?: string[] | null;
+  projects?: Array<{ name?: string; tech_stack?: string[]; domain?: string; description?: string }> | null;
+  experience_items?: Array<{ title?: string; company?: string; duration?: string; highlights?: string[] }> | null;
+  education?: Record<string, unknown> | null;
+};
+
+type SkillContribution = {
+  name: string;
+  contribution: number;
+  resumeEvidence: string[];
+  jobEvidence: string;
+};
+
+type MissingSkillImpact = {
+  name: string;
+  impact: number;
+  jobEvidence: string;
+};
+
 function verdictStyle(verdict?: string): { label: string; className: string } {
   if (verdict === "strong_match") return { label: "Strong Match", className: "bg-emerald-50 text-emerald-700 border-emerald-200" };
   if (verdict === "close_miss") return { label: "Close Miss", className: "bg-amber-50 text-amber-800 border-amber-200" };
@@ -85,11 +105,100 @@ function difficultyClass(difficulty?: string): string {
   return "bg-emerald-100 text-emerald-800 border-emerald-200";
 }
 
+function normalizeSkillName(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function displaySkillName(value: string): string {
+  const normalized = normalizeSkillName(value);
+  const aliases: Record<string, string> = {
+    postgres: "PostgreSQL",
+    postgresql: "PostgreSQL",
+    "github actions": "GitHub Actions",
+    "ci/cd pipelines": "CI/CD",
+    cicd: "CI/CD",
+    javascript: "JavaScript",
+    typescript: "TypeScript",
+    fastapi: "FastAPI",
+  };
+  return aliases[normalized] ?? value.trim();
+}
+
+function extractRequiredSkills(requiredSkills: unknown): Array<{ name: string; weight: number }> {
+  if (!requiredSkills) return [];
+  const rawItems = Array.isArray(requiredSkills) ? requiredSkills : Object.entries(requiredSkills as Record<string, unknown>);
+
+  return rawItems
+    .map((item): { name: string; weight: number } | null => {
+      if (typeof item === "string") return { name: displaySkillName(item), weight: 0.1 };
+      if (Array.isArray(item)) {
+        const [name, weight] = item;
+        if (typeof name !== "string") return null;
+        return { name: displaySkillName(name), weight: typeof weight === "number" ? weight : 0.1 };
+      }
+      if (typeof item === "object" && item !== null) {
+        const record = item as Record<string, unknown>;
+        const name = record.skill ?? record.name ?? record.technology;
+        if (typeof name !== "string") return null;
+        return { name: displaySkillName(name), weight: typeof record.weight === "number" ? record.weight : 0.1 };
+      }
+      return null;
+    })
+    .filter((item): item is { name: string; weight: number } => Boolean(item));
+}
+
+function sentenceIncludesSkill(text: string | undefined | null, skill: string): boolean {
+  return normalizeSkillName(text ?? "").includes(normalizeSkillName(skill));
+}
+
+function findResumeEvidence(profile: CandidateProfile | null, skill: string): string[] {
+  if (!profile) return [];
+  const evidence = new Set<string>();
+  if ((profile.skills ?? []).some((item) => normalizeSkillName(item) === normalizeSkillName(skill))) evidence.add("Profile Skills");
+
+  if ((profile.projects ?? []).some((project) => {
+    const techStack = project.tech_stack?.join(" ") ?? "";
+    return [project.name, project.domain, project.description, techStack].some((value) => sentenceIncludesSkill(value, skill));
+  })) evidence.add("Project");
+
+  if ((profile.experience_items ?? []).some((item) => {
+    const highlights = item.highlights?.join(" ") ?? "";
+    return [item.title, item.company, item.duration, highlights].some((value) => sentenceIncludesSkill(value, skill));
+  })) evidence.add("Experience");
+
+  if (profile.education && sentenceIncludesSkill(Object.values(profile.education).join(" "), skill)) evidence.add("Education");
+  return Array.from(evidence);
+}
+
+function findJobEvidence(description: string | undefined | null, skill: string): string {
+  const normalizedDescription = description ?? "";
+  const matchingLine = normalizedDescription
+    .split(/\n|\.|;/)
+    .map((line) => line.trim())
+    .find((line) => sentenceIncludesSkill(line, skill));
+
+  const context = normalizeSkillName(matchingLine ?? normalizedDescription);
+  if (context.includes("preferred") || context.includes("nice to have") || context.includes("bonus")) return "Preferred qualifications";
+  if (context.includes("responsibilities") || context.includes("you will") || context.includes("build") || context.includes("deliver")) return "Responsibilities";
+  return "Required qualifications";
+}
+
+function contributionFromWeight(weight: number): number {
+  return Math.max(2, Math.round(Math.min(1, Math.max(0.05, weight)) * 35));
+}
+
+function contributionBarClass(percent: number): string {
+  if (percent >= 8) return "bg-emerald-500";
+  if (percent >= 5) return "bg-blue-500";
+  return "bg-amber-500";
+}
+
 export default function JobDetailPage() {
   const { id: jobId } = useParams<{ id: string }>();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [hasResumeProfile, setHasResumeProfile] = useState(false);
+  const [resumeProfile, setResumeProfile] = useState<CandidateProfile | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [score, setScore] = useState<ScoreResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,9 +242,10 @@ export default function JobDetailPage() {
         }
 
         try {
-          await api.get(`/resume/${resolvedUserId}`);
+          const resumeResponse = await api.get<CandidateProfile>(`/resume/${resolvedUserId}`);
           if (cancelled) return;
           setHasResumeProfile(true);
+          setResumeProfile(resumeResponse.data);
 
           setComputing(true);
           const scoreResponse = await api.post<ScoreResponse>("/scores/compute", {
@@ -149,6 +259,7 @@ export default function JobDetailPage() {
           const status = (resumeError as { response?: { status?: number } })?.response?.status;
           if (!cancelled) {
             setHasResumeProfile(false);
+            setResumeProfile(null);
             if (status !== 404) {
               setError("Could not verify resume profile.");
             }
@@ -236,6 +347,35 @@ export default function JobDetailPage() {
   const missingSkills = score?.gap_analysis?.missing_skills ?? [];
   const recommendations = score?.gap_analysis?.project_recommendations ?? [];
   const strengths = score?.gap_analysis?.strengths ?? [];
+  const scoreBreakdown = useMemo(() => {
+    if (!job || !score) {
+      return { matched: [] as SkillContribution[], missing: [] as MissingSkillImpact[], weighted: [] as Array<{ name: string; percent: number }> };
+    }
+
+    const requiredSkills = extractRequiredSkills(job.required_skills);
+    const missingNames = new Set(missingSkills.map((skill) => normalizeSkillName(skill.name)));
+    const matched = requiredSkills
+      .filter((skill) => !missingNames.has(normalizeSkillName(skill.name)))
+      .slice(0, 8)
+      .map((skill) => ({
+        name: skill.name,
+        contribution: contributionFromWeight(skill.weight),
+        resumeEvidence: findResumeEvidence(resumeProfile, skill.name),
+        jobEvidence: findJobEvidence(job.description, skill.name),
+      }));
+
+    const missing = missingSkills.slice(0, 8).map((skill) => {
+      const requiredSkill = requiredSkills.find((item) => normalizeSkillName(item.name) === normalizeSkillName(skill.name));
+      return {
+        name: skill.name,
+        impact: contributionFromWeight(requiredSkill?.weight ?? Math.max(0.08, skill.confidence * 0.16)),
+        jobEvidence: findJobEvidence(job.description, skill.name),
+      };
+    });
+
+    const weighted = [...matched.map((skill) => ({ name: skill.name, percent: skill.contribution })), ...missing.map((skill) => ({ name: skill.name, percent: skill.impact }))].slice(0, 10);
+    return { matched, missing, weighted };
+  }, [job, missingSkills, resumeProfile, score]);
 
   if (loading) {
     return (
@@ -342,6 +482,102 @@ export default function JobDetailPage() {
             ) : null}
           </div>
         </article>
+      </section>
+
+      <section className="gc-panel rounded-3xl p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Score Breakdown</h2>
+            <p className="mt-1 text-sm text-slate-600">A readable explanation layer on top of the existing match score.</p>
+          </div>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-right">
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Final Match Score</p>
+            <p className="text-2xl font-black text-blue-950">{score ? `${Math.round(score.overall_score)}%` : "--"}</p>
+          </div>
+        </div>
+
+        {!score ? (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
+            Upload a resume and compute a score to see matched skills, missing skills, and evidence.
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <article className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+              <h3 className="text-sm font-bold text-emerald-950">Matched Skills</h3>
+              <div className="mt-3 space-y-3">
+                {scoreBreakdown.matched.length === 0 ? (
+                  <p className="text-sm text-emerald-800">No structured matched skills were available from this job posting.</p>
+                ) : (
+                  scoreBreakdown.matched.map((skill) => (
+                    <div key={skill.name} className="rounded-xl border border-emerald-100 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-slate-950">{skill.name}</p>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black text-emerald-800">+{skill.contribution}%</span>
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-slate-500">This skill was found in:</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {(skill.resumeEvidence.length > 0 ? skill.resumeEvidence : ["Parsed resume profile"]).map((evidence) => (
+                          <span key={evidence} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700">{evidence}</span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">This requirement came from: <strong>{skill.jobEvidence}</strong></p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+              <h3 className="text-sm font-bold text-amber-950">Missing Skills</h3>
+              <div className="mt-3 space-y-3">
+                {scoreBreakdown.missing.length === 0 ? (
+                  <p className="text-sm text-amber-800">No missing skills were detected in the structured gap analysis.</p>
+                ) : (
+                  scoreBreakdown.missing.map((skill) => (
+                    <div key={skill.name} className="rounded-xl border border-amber-100 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-slate-950">{skill.name}</p>
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">Potential +{skill.impact}%</span>
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">This requirement came from: <strong>{skill.jobEvidence}</strong></p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 bg-white p-4 lg:col-span-2">
+              <h3 className="text-sm font-bold text-slate-950">Weight Contribution Visualization</h3>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {scoreBreakdown.weighted.length === 0 ? (
+                  <p className="text-sm text-slate-600">Weighted skill contributions appear when the job has structured skill requirements.</p>
+                ) : (
+                  scoreBreakdown.weighted.map((item) => (
+                    <div key={item.name}>
+                      <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-600">
+                        <span>{item.name}</span>
+                        <span>{item.percent}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div className={`h-2 rounded-full ${contributionBarClass(item.percent)}`} style={{ width: `${Math.min(100, item.percent * 8)}%` }} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </article>
+
+            <details className="rounded-2xl border border-blue-100 bg-blue-50 p-4 lg:col-span-2">
+              <summary className="cursor-pointer text-sm font-bold text-blue-950">Why did I get this score?</summary>
+              <p className="mt-3 text-sm leading-7 text-blue-900">
+                Your final score is the existing GapCheck compatibility score. This panel explains it by mapping structured job requirements to resume evidence and missing-skill impact. Matched skills raise the score when they appear in your parsed resume projects, experience, education, or skills list. Missing skills estimate possible upside based on the job skill weight and the confidence of the gap analysis.
+              </p>
+              <p className="mt-2 text-sm leading-7 text-blue-900">
+                Dimension scores: Skills {Math.round(score.skills_score)}%, Experience {Math.round(score.experience_score)}%, Education {Math.round(score.education_score)}%, Projects {Math.round(score.project_score)}%, Domain {Math.round(score.domain_score)}%.
+              </p>
+            </details>
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -491,5 +727,6 @@ export default function JobDetailPage() {
     </div>
   );
 }
+
 
 

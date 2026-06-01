@@ -1,9 +1,10 @@
-import { NavLink } from "react-router-dom";
+﻿import { NavLink } from "react-router-dom";
 
 const navItems = [
   { label: "Jobs", to: "/" },
   { label: "Resume", to: "/profile" },
   { label: "Tracker", to: "/tracker" },
+  { label: "Case Study", to: "/case-study/gapcheck" },
 ];
 
 export default function Navbar() {
@@ -50,3 +51,6 @@ export default function Navbar() {
     </nav>
   );
 }
+
+
+
