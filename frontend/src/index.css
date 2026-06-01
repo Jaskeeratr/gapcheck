@@ -103,6 +103,29 @@ body::before {
   -webkit-text-fill-color: transparent;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .gc-page,
+  .gc-orb,
+  .animate-pulse {
+    animation: none !important;
+  }
+
+  .hover\:-translate-y-1:hover,
+  .group:hover .group-hover\:-translate-y-1 {
+    transform: none !important;
+  }
+}
+
 ::selection {
   background: #cfe5ff;
   color: #0b2b56;

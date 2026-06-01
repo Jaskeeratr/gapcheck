@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 
@@ -202,7 +202,7 @@ export default function JobBoardPage() {
     };
   }, [userId]);
 
-  async function handleTrackApplication(jobId: string): Promise<void> {
+  const handleTrackApplication = useCallback(async (jobId: string): Promise<void> => {
     if (!userId) {
       setApiError("Could not initialize user session from backend.");
       return;
@@ -231,9 +231,9 @@ export default function JobBoardPage() {
         return next;
       });
     }
-  }
+  }, [userId]);
 
-  async function handleRefreshLiveJobs(): Promise<void> {
+  const handleRefreshLiveJobs = useCallback(async (): Promise<void> => {
     try {
       setIngesting(true);
       setApiError(null);
@@ -293,7 +293,7 @@ export default function JobBoardPage() {
     } finally {
       setIngesting(false);
     }
-  }
+  }, [includeBaseline, locationFocus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -436,4 +436,5 @@ export default function JobBoardPage() {
     </div>
   );
 }
+
 

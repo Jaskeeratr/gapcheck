@@ -1,10 +1,11 @@
-﻿type SourceStatsProps = {
+﻿import { memo } from "react";
+type SourceStatsProps = {
   sourceCounts: Record<string, number>;
 };
 
 const sources = ["greenhouse", "lever", "remotive", "arbeitnow", "remoteok"];
 
-export default function SourceStats({ sourceCounts }: SourceStatsProps) {
+function SourceStats({ sourceCounts }: SourceStatsProps) {
   return (
     <>
       <div className="mb-4 grid gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-2 lg:grid-cols-5">
@@ -20,4 +21,7 @@ export default function SourceStats({ sourceCounts }: SourceStatsProps) {
     </>
   );
 }
+
+export default memo(SourceStats);
+
 

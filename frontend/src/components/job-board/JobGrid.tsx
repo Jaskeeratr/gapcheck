@@ -1,4 +1,5 @@
-﻿import JobCard from "../JobCard";
+﻿import { memo } from "react";
+import JobCard from "../JobCard";
 import type { Job } from "../../types/job";
 
 type ScoreBadge = {
@@ -19,7 +20,7 @@ type JobGridProps = {
   onTrack: (jobId: string) => void;
 };
 
-export default function JobGrid({
+function JobGrid({
   loading,
   jobs,
   hasResumeProfile,
@@ -68,4 +69,7 @@ export default function JobGrid({
     </div>
   );
 }
+
+export default memo(JobGrid);
+
 

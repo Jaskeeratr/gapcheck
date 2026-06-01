@@ -1,4 +1,5 @@
-﻿type RecommendationView = "recommended" | "close" | "reach" | "all";
+﻿import { memo } from "react";
+type RecommendationView = "recommended" | "close" | "reach" | "all";
 
 type RecommendationTabsProps = {
   recommendationView: RecommendationView;
@@ -13,7 +14,7 @@ const tabs: Array<{ key: RecommendationView; label: string }> = [
   { key: "all", label: "All Roles" },
 ];
 
-export default function RecommendationTabs({ recommendationView, setRecommendationView, recommendationCounts }: RecommendationTabsProps) {
+function RecommendationTabs({ recommendationView, setRecommendationView, recommendationCounts }: RecommendationTabsProps) {
   return (
     <div className="mb-4 flex flex-wrap gap-2">
       {tabs.map((item) => (
@@ -30,4 +31,7 @@ export default function RecommendationTabs({ recommendationView, setRecommendati
     </div>
   );
 }
+
+export default memo(RecommendationTabs);
+
 

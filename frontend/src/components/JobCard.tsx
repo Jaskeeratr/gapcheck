@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Link } from "react-router-dom";
 
 import type { Job } from "../types/job";
@@ -87,7 +88,7 @@ function buildEvidence(job: Job, matchScore?: number, profileKeywords: string[] 
   return evidence.slice(0, 3);
 }
 
-export default function JobCard({
+function JobCard({
   job,
   matchLabel = null,
   matchClassName = "bg-slate-100 text-slate-700 border-slate-200",
@@ -168,3 +169,5 @@ export default function JobCard({
     </article>
   );
 }
+
+export default memo(JobCard);

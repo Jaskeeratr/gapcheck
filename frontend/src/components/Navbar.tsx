@@ -1,6 +1,7 @@
 ﻿import { NavLink } from "react-router-dom";
 
 const navItems = [
+  { label: "About", to: "/about-gapcheck" },
   { label: "Jobs", to: "/" },
   { label: "Resume", to: "/profile" },
   { label: "Tracker", to: "/tracker" },
